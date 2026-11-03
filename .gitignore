@@ -179,3 +179,10 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# === Bao mat & runtime (them boi Claude) ===
+# File chua API key - TUYET DOI khong len git
+api key.ini
+# Database watchlist (du lieu chay) - khong can theo doi
+antigravity.db
+*.db
