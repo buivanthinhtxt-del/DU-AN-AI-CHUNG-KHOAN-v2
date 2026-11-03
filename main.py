@@ -3,7 +3,7 @@ import io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 from data_fetcher import get_historical_data, get_peers_performance
-from ai_analyzer import analyze_stock_data
+from ai_analyzer import analyze_stock_data, MARKET_INDICES
 from news_fetcher import get_latest_news
 from tabulate import tabulate
 import warnings
@@ -44,9 +44,12 @@ def main():
         print("  -> Không tìm thấy trang tin có sẵn. (Có thể phân tích thuần số liệu).")
         
     peers_info = get_peers_performance(symbol)
-    
+
+    print("\n[*] Đang tải VN-Index & VN30 để đánh giá 'thời tiết' thị trường...")
+    market_data = {idx: get_historical_data(idx, 365) for idx in MARKET_INDICES}
+
     print("\n[*] Đang chuyển Cổ Phiếu Vua, số liệu Ngành, và Tin thời sự cho AI AI... Hãy chờ trong vài giây!")
-    analysis = analyze_stock_data(symbol, df, news_items, peers_info)
+    analysis = analyze_stock_data(symbol, df, news_items, peers_info, market_data)
     
     print_header("BÁO CÁO PHÂN TÍCH TỪ CHUYÊN GIA AI")
     print(analysis)

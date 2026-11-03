@@ -19,7 +19,7 @@ import json
 
 from data_fetcher import get_historical_data, get_peers_performance
 from news_fetcher import get_latest_news
-from ai_analyzer import analyze_stock_data
+from ai_analyzer import analyze_stock_data, MARKET_INDICES
 
 load_dotenv()
 
@@ -64,18 +64,20 @@ async def analyze_stock(req: AnalyzeRequest):
         raise HTTPException(status_code=500, detail="Chưa cấu hình GEMINI_API_KEY trong file .env")
         
     try:
-        # 1. Khởi chạy Đa luồng lấy dữ liệu (Giá cổ phiếu, Tin Tức, So sánh cùng ngành)
+        # 1. Khởi chạy Đa luồng lấy dữ liệu (Giá cổ phiếu, Tin Tức, So sánh cùng ngành, Chỉ số thị trường)
         import concurrent.futures
         days = 365
-        
+
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_df = executor.submit(get_historical_data, symbol, days, target_date)
             future_peers = executor.submit(get_peers_performance, symbol, target_date)
             future_news = executor.submit(get_latest_news, symbol)
-            
+            future_market = {idx: executor.submit(get_historical_data, idx, days, target_date) for idx in MARKET_INDICES}
+
             df = future_df.result()
             peers_info = future_peers.result()
             news_items = future_news.result()
+            market_data = {idx: future.result() for idx, future in future_market.items()}
 
         if df.empty:
             raise HTTPException(status_code=404, detail=f"Không tìm thấy dữ liệu hoặc mã cổ phiếu {symbol} không hợp lệ.")
@@ -87,7 +89,7 @@ async def analyze_stock(req: AnalyzeRequest):
         
         # 4. Phân tích bằng AI
         print(f"[*] Đang gửi yêu cầu phân tích {symbol} tới Gemini AI...")
-        analysis_json_str = analyze_stock_data(symbol, df, news_items, peers_info)
+        analysis_json_str = analyze_stock_data(symbol, df, news_items, peers_info, market_data)
         
         # 5. Parse JSON từ AI (Lọc bỏ các khối markdown nếu có)
         try:

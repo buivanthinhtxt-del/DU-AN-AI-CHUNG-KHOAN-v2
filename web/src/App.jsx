@@ -166,6 +166,7 @@ function App() {
       window.removeEventListener('resize', handleResize);
       if (chartRef.current) {
         chartRef.current.remove();
+        chartRef.current = null;
       }
     };
   }, [data]);
@@ -189,71 +190,80 @@ function App() {
 
   const metrics = getLatestMetrics();
 
-  // Helper to format AI report text with basic markdown support (headers, bold, tables)
+  // Helper to format AI report text with basic markdown support (headers, bold, italic, bullets, tables)
   const formatReport = (text) => {
     if (!text) return null;
-    
+
     const lines = text.split('\n');
     const result = [];
     let tableLines = [];
-    let inTable = false;
+
+    // Render the gathered table lines
+    const flushTable = (key) => {
+        if (tableLines.length === 0) return;
+        const rows = tableLines.filter(row => !row.includes('---'));
+        result.push(
+            <div className="table-wrapper" key={`table-${key}`}>
+                <table className="analysis-table">
+                    <tbody>
+                        {rows.map((row, ri) => {
+                            const cols = row.replace(/^\||\|$/g, '').split('|');
+                            return (
+                                <tr key={ri}>
+                                    {cols.map((col, ci) => (
+                                        <td key={ci} style={{ fontWeight: ri === 0 ? '700' : '400', background: ri === 0 ? 'rgba(47, 129, 247, 0.1)' : 'transparent' }}>
+                                            {col.trim().replace(/\*\*/g, '')}
+                                        </td>
+                                    ))}
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        );
+        tableLines = [];
+    };
 
     for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        
+        let line = lines[i].trim();
+
         // Handle Table
         if (line.startsWith('|')) {
-            inTable = true;
             tableLines.push(line);
             continue;
-        } else if (inTable) {
-            // Render the gathered table lines
-            if (tableLines.length > 0) {
-                const rows = tableLines.filter(row => !row.includes('---'));
-                result.push(
-                    <div className="table-wrapper" key={`table-${i}`}>
-                        <table className="analysis-table">
-                            <tbody>
-                                {rows.map((row, ri) => {
-                                    const cols = row.split('|').filter(c => c.trim() !== '' || row.indexOf('|') !== row.lastIndexOf('|'));
-                                    return (
-                                        <tr key={ri}>
-                                            {cols.map((col, ci) => (
-                                                <td key={ci} style={{ fontWeight: ri === 0 ? '700' : '400', background: ri === 0 ? 'rgba(47, 129, 247, 0.1)' : 'transparent' }}>
-                                                    {col.trim().replace(/\*\*/g, '')}
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                );
-            }
-            tableLines = [];
-            inTable = false;
         }
+        flushTable(i);
+
+        // Skip code fences & horizontal rules, unwrap blockquotes
+        if (line.startsWith('```') || /^(-{3,}|\*{3,})$/.test(line)) continue;
+        if (line.startsWith('>')) line = line.replace(/^>\s*/, '');
 
         // Handle Headers
-        if (line.startsWith('###')) {
-            result.push(<h3 key={i}>{line.replace('###', '').trim()}</h3>);
+        if (line.startsWith('#')) {
+            result.push(<h3 key={i}>{line.replace(/^#+\s*/, '')}</h3>);
         } else if (line.match(/^[0-9]\./)) {
             result.push(<h3 key={i} style={{ color: 'var(--accent-gold)' }}>{line}</h3>);
         } else if (line !== '') {
-            // Simple bolding support
-            const parts = line.split(/(\*\*.*?\*\*)/);
+            // Bullets, bold & italic support
+            if (/^[-*]\s/.test(line)) line = '• ' + line.slice(2);
+            const parts = line.split(/(\*\*.*?\*\*|\*[^*\s][^*]*\*)/);
             result.push(
                 <p key={i}>
-                    {parts.map((part, pi) => 
-                        part.startsWith('**') && part.endsWith('**') 
-                        ? <strong key={pi} style={{ color: 'var(--text-active)' }}>{part.slice(2, -2)}</strong> 
-                        : part
-                    )}
+                    {parts.map((part, pi) => {
+                        if (part.startsWith('**') && part.endsWith('**')) {
+                            return <strong key={pi} style={{ color: 'var(--text-active)' }}>{part.slice(2, -2)}</strong>;
+                        }
+                        if (part.length > 2 && part.startsWith('*') && part.endsWith('*')) {
+                            return <em key={pi}>{part.slice(1, -1)}</em>;
+                        }
+                        return part;
+                    })}
                 </p>
             );
         }
     }
+    flushTable(lines.length);
     return result;
   };
 
