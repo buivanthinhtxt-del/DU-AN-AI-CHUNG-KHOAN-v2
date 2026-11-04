@@ -129,6 +129,8 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -183,6 +185,7 @@ cython_debug/
 # === Bao mat & runtime (them boi Claude) ===
 # File chua API key - TUYET DOI khong len git
 api key.ini
+**/api key.ini
 # Database watchlist (du lieu chay) - khong can theo doi
 antigravity.db
 *.db

@@ -43,7 +43,7 @@ def calculate_indicators(df: pd.DataFrame):
         print(f"[!] Loi tinh toan chi so: {e}")
         return df
 
-def analyze_stock_data(symbol: str, df: pd.DataFrame, news_items: list = None, peers_info: dict = None) -> str:
+def analyze_stock_data(symbol: str, df: pd.DataFrame, news_items: list = None, peers_info: dict = None, macro_info: dict = None) -> str:
     """
     Sử dụng Gemini để phân tích theo Quy trình 4 bước: Thời tiết, Móng, Bản vẽ, Kịch bản.
     """
@@ -56,6 +56,15 @@ def analyze_stock_data(symbol: str, df: pd.DataFrame, news_items: list = None, p
     df = calculate_indicators(df)
     latest = df.iloc[-1]
     
+    macro_context = ""
+    if macro_info:
+        macro_context = f"""
+THỜI TIẾT VĨ MÔ TÀI CHÍNH (Step 1):
+- Vàng (Gold): {macro_info.get('GOLD', 'N/A')}
+- Dầu (Brent): {macro_info.get('OIL', 'N/A')}
+- Tỷ giá USD/VND: {macro_info.get('USD_VND', 'N/A')}
+"""
+
     tech_context = f"""
 DỮ LIỆU KỸ THUẬT HIỆN TẠI (Step 2):
 - Giá hiện hành: {latest['Close']:.2f}
@@ -79,67 +88,114 @@ DỮ LIỆU KỸ THUẬT HIỆN TẠI (Step 2):
     df_string = df.tail(15).to_string()
     
     prompt = f"""
-BẠN LÀ SIÊU AI CHUYÊN GIA PHÂN TÍCH CHỨNG KHOÁN (QUANTS).
-Nhiệm vụ: Phân tích mã {symbol} theo QUY TRÌNH 4 BƯỚC NGHIÊM NGẶT.
+BẠN ĐANG THỰC HIỆN NHIỆM VỤ PHÂN TÍCH MÃ CỔ PHIẾU {symbol}.
 
 DỮ LIỆU ĐẦU VÀO:
 {df_string}
-{tech_context}{peers_context}{news_context}
+{macro_context}{tech_context}{peers_context}{news_context}
 
-YÊU CẦU BÁO CÁO (PHẦN 'analysis') - BẮT BUỘC THEO CẤU TRÚC:
+YÊU CẦU BÁO CÁO (PHẦN 'analysis') - BẮT BUỘC THEO CẤU TRÚC 5 BƯỚC (Dùng Bullet points rõ ràng, văn phong thực chiến):
 
-### BƯỚC 1: XEM "THỜI TIẾT" (VN-INDEX & VĨ MÔ)
-- Đánh giá thị trường chung. Chú ý mốc 1.800 - 1.820.
-- Kiểm tra thanh khoản (Vol) và hiện tượng "xanh vỏ đỏ lòng" (kéo trụ hay tăng đều).
-- Đánh giá tác động Địa chính trị (Giá dầu, xung đột) đến nhóm ngành.
+### BƯỚC 1: ĐÁNH GIÁ VĨ MÔ & SÓNG NGÀNH (The "Why")
+- Vĩ mô: Đánh giá nhanh các yếu tố đang chi phối thị trường (Tỷ giá VND/USD, lãi suất điều hành, giá hàng hóa thế giới, xung đột địa chính trị).
+- Sóng ngành: Nhóm ngành của {symbol} đang ở chu kỳ nào (Tích lũy, Tăng trưởng, Bão hòa hay Suy thoái)? Có được hưởng lợi từ chính sách nhà nước (FDI, đầu tư công) không?
 
-### BƯỚC 2: KIỂM TRA "MÓNG" (KỸ THUẬT NGẮN HẠN T+)
-- Đánh giá "3 đường chỉ": MA10/MA20, RSI (có nóng > 75 không?), MACD (có cắt Signal không?).
-- Phân tích Dòng tiền (Vol): Phiên tăng có Vol cao không? Hay tăng Vol "héo".
+### BƯỚC 2: PHÂN TÍCH CƠ BẢN & CHẤT XÚC TÁC (The "What")
+- Nội tại (FA): Đánh giá nhanh sức khỏe tài chính dựa trên tin tức hoặc kiến thức.
+- Catalyst (Chất xúc tác): Có câu chuyện gì sắp tới đẩy giá lên không? (Chia cổ tức, game tăng vốn, dự án mới, thoái vốn, trúng thầu...). Những tin này đã phản ánh vào giá (Price-in) chưa?
 
-### BƯỚC 3: SOI "BẢN VẼ" (TIN TỨC & SỰ KIỆN)
-- Phân tích các tin ĐHĐCĐ, lịch họp, lấp Gap.
-- Áp dụng quy tắc: Mua kỳ vọng, bán sự thật.
+### BƯỚC 3: PHÂN TÍCH KỸ THUẬT & DÒNG TIỀN (The "How")
+- Xu hướng: Đánh giá vị trí giá so với MA/EMA ngắn và trung hạn.
+- Chỉ báo: RSI đang ở vùng nào? MACD có phân kỳ không?
+- Dòng tiền (Smart Money): Volume giao dịch nói lên điều gì? Dòng tiền lớn đang gom hàng, đẩy giá hay đang xả (Phân phối)? Cảnh báo nếu có dấu hiệu Bull-trap.
+- Sức mạnh tương quan (RS): Mã này đang khỏe hơn hay yếu hơn VN-Index/Ngành?
 
-### BƯỚC 4: CHỐT "KỊCH BẢN" (ACTION PLAN)
-Xuất một bảng Markdown với kịch bản chi tiết:
-| Kịch bản | Dấu hiệu nhận biết | Hành động cụ thể |
-| :--- | :--- | :--- |
-| **Kịch bản Tốt (Bullish)** | Index vượt 1.830, Vol bùng nổ... | Tấn công: Múc thêm, nắm giữ... |
-| **Kịch bản Đi ngang (Sideway)** | Giá biến động hẹp, Vol thấp... | Thăm dò: Mua nhịp nhúng, không đu xanh |
-| **Kịch bản Xấu (Bearish)** | Trụ bị bán rát, Index thủng 1.800... | Phòng thủ: Bán giảm tỷ trọng, giữ tiền mặt |
+### BƯỚC 4: SO SÁNH (Nếu có thông tin Peers)
+- Lập bảng so sánh nhanh {symbol} với các mã trong ngành dựa trên: Định giá, Sức mạnh dòng tiền hiện tại, và Động lực.
+- Đưa ra kết luận dứt khoát: Có nên ưu tiên mã này trong ngành không?
 
+### BƯỚC 5: CHIẾN LƯỢC HÀNH ĐỘNG & KỊCH BẢN (The "Action")
+- Khuyến nghị TỐI HẬU: CÓ NÊN MUA HAY KHÔNG? (Trả lời dứt khoát).
+- TRẢ LỜI RÕ: Mua tại THỜI ĐIỂM NÀO là hợp lý nhất? Mua tại MỨC GIÁ BAO NHIÊU để mang lại biên lợi nhuận tăng trưởng tốt nhất?
+- Cung cấp TÍNH TOÁN GIÁ CỤ THỂ (Trình bày CĂN TRÁI, khoa học, rõ ràng):
+  + Giá mua tối ưu (Buy Zone): [Điền mức giá cụ thể]
+  + Giá bán mục tiêu (Target Price): [Điền mức giá cụ thể]
+  + Tiềm năng tăng trưởng (Upside %): [Tính toán % tăng trưởng]
+  + Mức giá cắt lỗ (Stop Loss): [Điền mức giá cụ thể để quản trị rủi ro]
+- Kịch bản rủi ro (Scenarios):
+  + Bull Case (Tốt): Điều kiện gì để bứt phá?
+  + Bear Case (Xấu): Nếu thủng hỗ trợ, giá trôi về đâu?
+  - **Dự báo giá cụ thể** cho các thời điểm (Phải có lý do tăng/giảm):
+    * Phiên sáng (trong 4‑6 giờ tới)
+    * Phiên chiều (trong 8‑12 giờ tới)
+    * Ngày hôm sau (T+1)
+    * Tuần tới (T+5)
+    Các dự báo phải trả về dạng JSON trong phần "predictions" với các trường:
+    {{"timeframe": "Morning", "days_future": 0, "high": <value>, "low": <value>, "reason": "<Ghi chú lý do ngắn gọn>"}}
+    {{"timeframe": "Afternoon", "days_future": 0, "high": <value>, "low": <value>, "reason": "<Ghi chú lý do ngắn gọn>"}}
+    {{"timeframe": "Next Day", "days_future": 1, "high": <value>, "low": <value>, "reason": "<Ghi chú lý do ngắn gọn>"}}
+    {{"timeframe": "Next Week", "days_future": 5, "high": <value>, "low": <value>, "reason": "<Ghi chú lý do ngắn gọn>"}}
 ---
-**Ví dụ chi tiết cho 1-2 tuần tới:**
-(Dựa trên lịch Thứ 6 "thay máu", Đầu tuần "thử lửa", Cuối tuần "nghiệm thu")
-
-TRẢ VỀ ĐỊNH DẠNG JSON:
+TRẢ VỀ ĐỊNH DẠNG JSON (BẮT BUỘC):
 {{
-  "analysis": "Nội dung phân tích 4 bước cực kỳ chi tiết...",
+  "scores": {{
+    "macro_industry": {{ "score": 80, "reason": "Phân tích chi tiết lý do cho điểm, ví dụ: Ngành đang được hưởng lợi từ chu kỳ nới lỏng tiền tệ và giá hàng hóa giảm..." }},
+    "fundamentals_catalyst": {{ "score": 60, "reason": "Phân tích chi tiết chất xúc tác, ví dụ: Doanh nghiệp chuẩn bị chia cổ tức 20% bằng tiền mặt vào tháng sau..." }},
+    "technical_momentum": {{ "score": 50, "reason": "Phân tích trạng thái kỹ thuật, ví dụ: Giá đang nằm trên EMA20 nhưng RSI tiến vào vùng quá mua, có rủi ro chỉnh..." }},
+    "comparative_strength": {{ "score": 40, "reason": "Phân tích tương quan, ví dụ: Cổ phiếu khỏe hơn VN-Index 5% trong 1 tháng qua, dòng tiền lớn đang gom..." }},
+    "action_strategy": {{ "score": 75, "reason": "Kịch bản hành động, ví dụ: Canh mua tại vùng hỗ trợ 24.5, mục tiêu ngắn hạn 28. Cắt lỗ khi thủng 23..." }}
+  }},
+  "overall_score": 61,
+  "analysis": "Nội dung phân tích 5 bước cực kỳ chi tiết theo yêu cầu...",
   "predictions": [
-    ... (Dự báo giá phi tuyến tính)
+    {{ "timeframe": "T+3 (Ngắn hạn)", "days_future": 3, "high": 18.5, "low": 17.0, "reason": "Chờ dòng tiền xác nhận" }},
+    {{ "timeframe": "T+7 (Trung hạn)", "days_future": 7, "high": 19.5, "low": 16.5, "reason": "Kỳ vọng ra báo cáo tài chính tốt" }}
   ]
 }}
-Lưu ý: Không xuất văn bản thừa ngoài JSON.
+Lưu ý: Bảng dự báo (predictions) PHẢI LÀ MẢNG JSON. Các điểm số `score` (0-100) PHẢI LÀ SỐ NGUYÊN. KHÔNG xuất văn bản thừa ngoài JSON.
 """
     
     try:
-        model_name = 'gemini-flash-latest'
-        model = genai.GenerativeModel(
-            model_name,
-            system_instruction="Ban la tro ly AI chuyen gia. Tra ve JSON duy nhat, trinh bay bao cao khoa hoc, dung quy trinh 4 buoc."
-        )
+        # Lấy danh sách các model khả dụng cho API Key này
+        available_models = [m.name.replace('models/', '') for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         
-        response = model.generate_content(
-            prompt, 
-            generation_config={"response_mime_type": "application/json"}
-        )
+        if not available_models:
+            raise Exception("API Key của bạn không có quyền truy cập vào bất kỳ model tạo văn bản nào của Google.")
+            
+        # Ưu tiên các model xịn nhất (nhưng vẫn an toàn vì đã check list)
+        preferred_models = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro', 'gemini-1.0-pro']
+        model_name = next((m for m in preferred_models if m in available_models), available_models[0])
+        print(f"[AI] Đang sử dụng model: {model_name}")
         
-        return response.text.strip()
+        system_instruction = """[ROLE - VAI TRÒ]
+Bạn là một Giám đốc phân tích chiến lược tại một quỹ đầu tư lớn ở Việt Nam. Tư duy của bạn sắc bén, cực kỳ nhạy cảm với dòng tiền (Smart Money) và am hiểu sâu sắc sự luân chuyển của kinh tế vĩ mô, địa chính trị thế giới tác động đến VN-Index. Văn phong của bạn thẳng thắn, ngắn gọn, tập trung vào số liệu thực tế, hành động dứt khoát như hai người bạn chuyên môn đang trao đổi. Không dùng từ ngữ mơ hồ, chung chung."""
+        
+        full_prompt = system_instruction + "\n\n" + prompt
+        model = genai.GenerativeModel(model_name)
+        
+        response = model.generate_content(full_prompt)
+        
+        # Extract JSON using string finding
+        text = response.text.strip()
+        start_idx = text.find('{')
+        end_idx = text.rfind('}')
+        
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            text = text[start_idx:end_idx+1]
+            
+        return text.strip()
     except Exception as e:
         print(f"[!] AI Error: {e}")
         return json.dumps({
-            "analysis": f"Lỗi gọi AI: {e}",
+            "scores": {
+                "macro_industry": { "score": 0, "reason": "System offline" },
+                "fundamentals_catalyst": { "score": 0, "reason": "System offline" },
+                "technical_momentum": { "score": 0, "reason": "System offline" },
+                "comparative_strength": { "score": 0, "reason": "System offline" },
+                "action_strategy": { "score": 0, "reason": "System offline" }
+            },
+            "overall_score": 0,
+            "analysis": f"⚠️ LƯU Ý: Khóa API của bạn vừa báo lỗi '{e}'. Tín hiệu có thể bị trễ do quá tải request. Vui lòng thử lại sau.",
             "predictions": []
         })
 

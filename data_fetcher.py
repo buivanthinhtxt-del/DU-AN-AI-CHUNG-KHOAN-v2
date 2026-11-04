@@ -24,32 +24,29 @@ def get_historical_data(symbol: str, days: int = 365, target_date: str = None) -
     print(f"[*] Dang tai du lieu {clean_symbol} tu {start_str} den {end_str}...")
     
     try:
-        from vnstock import Vnstock
-        stock = Vnstock().stock(symbol=clean_symbol, source='KBS')
-        df = stock.quote.history(start=start_str, end=end_str, interval='1D')
+        from vnstock.api.quote import Quote
+        q = Quote(symbol=clean_symbol, source='VCI')
+        df = q.history(start=start_str, end=end_str, interval='1D')
         
         if df is not None and not df.empty:
-            # Chuẩn hoá tên cột (KBS trả về: time, open, high, low, close, volume)
-            df = df.rename(columns={
-                'time': 'Date',
-                'open': 'Open', 
-                'high': 'High', 
-                'low': 'Low', 
-                'close': 'Close', 
-                'volume': 'Volume'
-            })
+            # Chuẩn hoá tên cột (có thể là Time, Open, High, Low, Close, Volume tùy nguồn)
+            df.columns = [c.capitalize() if c.islower() else c for c in df.columns]
+            if 'Time' in df.columns:
+                df = df.rename(columns={'Time': 'Date'})
+                
             if 'Date' in df.columns:
                 df['Date'] = pd.to_datetime(df['Date'])
                 df = df.set_index('Date')
+                
             cols_to_keep = [c for c in ['Open', 'High', 'Low', 'Close', 'Volume'] if c in df.columns]
-            print(f"[+] vnstock KBS: Tai thanh cong {len(df)} phien giao dich cho {clean_symbol}")
+            print(f"[+] vnstock VCI: Tai thanh cong {len(df)} phien giao dich cho {clean_symbol}")
             return df[cols_to_keep]
         else:
-            print(f"[-] vnstock KBS: Khong co du lieu cho {clean_symbol}")
+            print(f"[-] vnstock VCI: Khong co du lieu cho {clean_symbol}")
             return pd.DataFrame()
             
     except Exception as e:
-        print(f"[!] vnstock KBS loi: {e}")
+        print(f"[!] vnstock loi: {e}")
         return pd.DataFrame()
 
 

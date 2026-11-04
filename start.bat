@@ -2,7 +2,7 @@
 echo [*] Dang khoi dong AI Stock Analyzer...
 
 :: Chay Backend trong cua so moi
-start cmd /k "echo [*] Dang chay Backend (FastAPI)... && .venv\Scripts\python.exe -m uvicorn api:app --host 0.0.0.0 --port 8000"
+start cmd /k "echo [*] Dang chay Backend (FastAPI)... && .venv\Scripts\python.exe -m uvicorn api:app --host 0.0.0.0 --port 8000 --reload"
 
 :: Cho 3 giay de Backend khoi dong truoc
 timeout /t 3 /nobreak > nul
