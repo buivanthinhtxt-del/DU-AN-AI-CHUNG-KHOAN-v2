@@ -514,10 +514,11 @@ flowchart LR
 -- ARGV[3]: Maximum permitted requests within window
 
 local key = KEYS[1]
+local seq_key = key .. ':seq'
 local now = tonumber(ARGV[1])
-local window = tonumber(ARGV[2])
+local window_ms = tonumber(ARGV[2])
 local limit = tonumber(ARGV[3])
-local clear_before = now - window
+local clear_before = now - window_ms
 
 -- 1. Remove expired timestamps outside the sliding window
 redis.call('ZREMRANGEBYSCORE', key, 0, clear_before)
@@ -526,17 +527,22 @@ redis.call('ZREMRANGEBYSCORE', key, 0, clear_before)
 local current_requests = redis.call('ZCARD', key)
 
 if current_requests < limit then
-    -- 3. Add current timestamp as both score and member
-    redis.call('ZADD', key, now, now .. '-' .. redis.call('INCR', key .. ':seq'))
-    -- 4. Set TTL to window length to prevent key leakage
-    redis.call('PEXPIRE', key, window)
+    -- 3. Increment monotonic sequence counter and set TTL to prevent key leakage
+    local seq = redis.call('INCR', seq_key)
+    redis.call('PEXPIRE', seq_key, window_ms)
+    
+    -- 4. Add current timestamp as both score and member
+    redis.call('ZADD', key, now, now .. '-' .. seq)
+    
+    -- 5. Set TTL on sliding window zset to prevent key leakage
+    redis.call('PEXPIRE', key, window_ms)
     return {1, limit - current_requests - 1, 0} -- {allowed, remaining, retry_after}
 else
     -- Request rejected: find earliest timestamp to compute retry_after
     local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
     local retry_after = 0
     if oldest and #oldest >= 2 then
-        retry_after = math.ceil((tonumber(oldest[2]) + window - now) / 1000)
+        retry_after = math.ceil((tonumber(oldest[2]) + window_ms - now) / 1000)
     end
     return {0, 0, retry_after} -- {denied, 0, retry_after_seconds}
 end
@@ -670,7 +676,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Request, HTTPException, status, Depends
+from fastapi import APIRouter, Request, HTTPException, status, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from backend.database import get_db_session
@@ -681,12 +687,14 @@ router = APIRouter(prefix="/api/webhook", tags=["Payment Webhooks"])
 
 PAYOS_CHECKSUM_KEY = "YOUR_PAYOS_CHECKSUM_KEY_FROM_DASHBOARD"
 
-def verify_payos_signature(data_payload: dict, received_signature: str, checksum_key: str) -> bool:
+def verify_payos_signature(data_payload: dict, signature: str, checksum_key: str) -> bool:
     """
     PayOS signature verification:
     Sort keys alphabetically, build query string: key1=value1&key2=value2,
     compute HMAC-SHA256 with checksum key.
     """
+    if not signature:
+        return False
     sorted_items = sorted([f"{k}={v}" for k, v in data_payload.items() if v is not None and k != "signature"])
     canonical_string = "&".join(sorted_items)
     computed_signature = hmac.new(
@@ -694,7 +702,7 @@ def verify_payos_signature(data_payload: dict, received_signature: str, checksum
         canonical_string.encode("utf-8"),
         hashlib.sha256
     ).hexdigest()
-    return hmac.compare_digest(computed_signature, received_signature)
+    return hmac.compare_digest(computed_signature, signature)
 
 @router.post("/payos")
 async def payos_webhook_endpoint(
@@ -709,10 +717,13 @@ async def payos_webhook_endpoint(
         raise HTTPException(status_code=400, detail="Malformed JSON")
 
     data = body.get("data", {})
-    received_signature = body.get("signature")
+    signature = body.get("signature")
     
-    # 2. Cryptographic signature verification
-    if not verify_payos_signature(data, received_signature, PAYOS_CHECKSUM_KEY):
+    # 2. Cryptographic signature verification with edge-case guard
+    # Safety check: reject immediately if signature is missing/None before hmac.compare_digest
+    if not signature: return Response(status_code=400)
+
+    if not verify_payos_signature(data, signature, PAYOS_CHECKSUM_KEY):
         logger.warning("Invalid PayOS webhook signature received.")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid signature")
 
@@ -730,8 +741,13 @@ async def payos_webhook_endpoint(
         logger.info(f"Duplicate webhook for order_code {order_code} acknowledged.")
         return {"code": "00", "message": "Transaction already settled"}
 
-    # 4. Fetch the pending transaction by order_code
-    order_query = select(PaymentTransaction).where(PaymentTransaction.order_code == order_code)
+    # 4. Fetch the pending transaction with row-level locking (SELECT ... FOR UPDATE)
+    # Prevents concurrent webhook race conditions by acquiring an exclusive row lock
+    order_query = (
+        select(PaymentTransaction)
+        .where(PaymentTransaction.order_code == order_code)
+        .with_for_update()
+    )
     order_res = await db.execute(order_query)
     tx = order_res.scalar_one_or_none()
 
@@ -751,8 +767,12 @@ async def payos_webhook_endpoint(
     tx.provider_transaction_id = trans_reference
     tx.webhook_payload = body
 
-    # 6. Execute Subscription State Machine transition
-    sub_query = select(Subscription).where(Subscription.user_id == tx.user_id)
+    # 6. Execute Subscription State Machine transition with row-level lock
+    sub_query = (
+        select(Subscription)
+        .where(Subscription.user_id == tx.user_id)
+        .with_for_update()
+    )
     sub_res = await db.execute(sub_query)
     sub = sub_res.scalar_one_or_none()
 
@@ -782,6 +802,16 @@ async def payos_webhook_endpoint(
 
     return {"code": "00", "message": "Success"}
 ```
+
+#### Concurrency Control & Webhook Race Prevention: `SELECT ... FOR UPDATE`
+
+In production payment architectures, payment gateways (like PayOS, VNPay, or Stripe) may retry or emit multiple webhook HTTP deliveries concurrently due to transient network lag or distributed worker retries. If two concurrent requests hit `/api/webhook/payos` simultaneously:
+
+1. **Race Condition Hazard**: Without row-level locks, Request A and Request B both execute `SELECT * FROM payment_transactions WHERE order_code = ...` concurrently. Both see `status = 'PENDING'`. Both proceed to update `status = 'PAID'` and double-increment the user's subscription duration (e.g., adding 60 days instead of 30 days).
+2. **Row-Level Exclusive Locking (`SELECT ... FOR UPDATE`)**:
+   - By appending `.with_for_update()` in SQLAlchemy (translating directly to SQL `SELECT ... FOR UPDATE`), PostgreSQL locks the specific transaction and subscription rows in exclusive write mode for the duration of the database transaction.
+   - When Request B attempts to query the row, it blocks until Request A finishes and executes `await db.commit()`.
+   - Once unlocked, Request B observes `existing_tx.status == 'PAID'` or `tx.status == 'PAID'` and immediately exits with `{"code": "00", "message": "Transaction already settled"}`, completely preventing duplicate quota grants, double billing credits, or race conditions.
 
 ---
 
