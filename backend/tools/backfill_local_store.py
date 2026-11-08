@@ -1,6 +1,7 @@
 """
-Tải trước lịch sử giá vào kho CSV cục bộ (backend/data/ohlcv/) — chạy NGAY khi nguồn trực tuyến còn hoạt động,
-để hệ thống vẫn có dữ liệu phân tích nếu vnstock ngừng (từ 10/11/2026) trước khi bạn cấu hình xong SSI FastConnect.
+Tải trước / cập nhật lịch sử giá vào kho CSV cục bộ (backend/data/ohlcv/) qua chuỗi nguồn của data_sources
+(SSI FastConnect → API công khai các CTCK → vnstock), để hệ thống vẫn có dữ liệu phân tích kể cả khi mọi nguồn
+trực tuyến tạm hỏng.
 
 Cách dùng (từ thư mục gốc dự án):
     .venv/Scripts/python.exe backend/tools/backfill_local_store.py              # mọi mã trong SECTOR_MAP + chỉ số, 5 năm

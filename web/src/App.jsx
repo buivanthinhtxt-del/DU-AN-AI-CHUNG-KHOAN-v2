@@ -10,6 +10,7 @@ import MacroTicker from './components/MacroTicker';
 import Sidebar from './components/Sidebar';
 import AIChatBox from './components/AIChatBox';
 import InvestmentThesis from './components/InvestmentThesis';
+import LiveQuote from './components/LiveQuote';
 
 const HORIZON_OPTIONS = ['Lướt sóng (1–4 tuần)', 'Swing (1–3 tháng)', 'Trung hạn (3–12 tháng)', 'Dài hạn (> 1 năm)'];
 const RISK_OPTIONS = ['Thấp', 'Trung bình', 'Cao'];
@@ -281,6 +282,8 @@ function App() {
                 </div>
               </div>
             )}
+
+            {data.symbol && <LiveQuote key={data.symbol} symbol={data.symbol} />}
 
             <div className="top-cards-row">
               <StockChart

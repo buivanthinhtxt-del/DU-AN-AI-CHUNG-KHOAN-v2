@@ -2,8 +2,9 @@
 Dữ liệu doanh nghiệp THẬT cho phân tích (thay thế hoàn toàn bảng số liệu FA viết cứng của bản cũ).
 
 Nguồn:
-1. Bảng giá phiên gần nhất (vnstock Trading.price_board): khối ngoại mua/bán, room ngoại, giá trần/sàn/tham chiếu,
-   trạng thái giao dịch, dư mua/dư bán → phát hiện trắng bên mua / dư mua trần.
+1. Bảng giá phiên gần nhất (ưu tiên API bảng giá Vietcap gọi trực tiếp; dự phòng vnstock Trading.price_board /
+   SSI FastConnect): khối ngoại mua/bán, room ngoại, giá trần/sàn/tham chiếu, trạng thái giao dịch, dư mua/dư bán
+   → phát hiện trắng bên mua / dư mua trần.
 2. Hồ sơ công ty (vnstock Company.overview): số cổ phiếu lưu hành → vốn hóa, mô hình kinh doanh, kiểm toán.
 3. Báo cáo tài chính (vnstock Finance) — best-effort, có giới hạn thời gian.
 4. Tra cứu web có trích dẫn (Gemini + Google Search): KQKD các quý gần nhất, định giá, sự kiện, khuyến nghị CTCK.
@@ -21,7 +22,7 @@ from typing import Optional
 import pandas as pd
 
 from cache_manager import get_cache, set_cache
-from data_sources import SSI, VNSTOCK
+from data_sources import PUBLIC, SSI, VNSTOCK
 import llm_client
 
 warnings.filterwarnings("ignore")
@@ -143,24 +144,83 @@ def _snapshot_from_ssi(fh: dict) -> dict:
     }
 
 
+def _board_flags(match, ceiling, floor, bid1_vol, ask1_vol, sec_status, trading_status) -> list[str]:
+    flags = []
+    if match and floor and match <= floor:
+        flags.append("GIÁ ĐANG Ở MỨC SÀN" + (" — dư mua rất mỏng, nguy cơ TRẮNG BÊN MUA (khó thoát hàng)" if not bid1_vol else ""))
+    if match and ceiling and match >= ceiling:
+        flags.append("GIÁ ĐANG Ở MỨC TRẦN" + (" — trắng bên bán (cầu áp đảo)" if not ask1_vol else ""))
+    # security_status 'N' = bình thường; các mã khác (W/C/R/S...) = cảnh báo / kiểm soát / hạn chế / tạm ngừng
+    sec = str(sec_status or "").strip().upper()
+    trading = str(trading_status or "").strip().upper()
+    if sec and sec not in ("N", "NORMAL", "0", "NONE", "NAN"):
+        flags.append(f"Mã trạng thái chứng khoán '{sec}' — có thể thuộc diện cảnh báo/kiểm soát/hạn chế giao dịch, cần kiểm tra trên HOSE/HNX")
+    if trading and "ACTIVATED" not in trading and trading not in ("NORMAL", "NONE", "NAN"):
+        flags.append(f"Trạng thái giao dịch: {trading} (có thể đang tạm ngừng/đình chỉ giao dịch)")
+    return flags
+
+
+def _public_quote(symbol: str) -> Optional[dict]:
+    ok, _ = PUBLIC.available()
+    if not ok:
+        return None
+    return (PUBLIC.price_board([symbol]) or {}).get(symbol)
+
+
+def _snapshot_from_quote(q: dict) -> dict:
+    """Ảnh chụp từ bảng giá Vietcap gọi trực tiếp (data_sources.PUBLIC.price_board) — giá đã theo nghìn đồng."""
+    bid, ask = q.get("bid") or [], q.get("ask") or []
+    cur_room, total_room, listed = q.get("foreign_room"), q.get("foreign_total_room"), q.get("listed_shares")
+    foreign_own = (total_room - cur_room) / listed * 100 if total_room and cur_room is not None and listed else None
+    fb_vol, fs_vol = q.get("foreign_buy_vol"), q.get("foreign_sell_vol")
+    return {
+        "source": "vci (bảng giá trực tiếp)",
+        "company_name": q.get("company_name"), "exchange": q.get("exchange"),
+        "trading_date": q.get("trading_date") or "", "session": q.get("session"),
+        "match_price": q.get("price"), "ref_price": q.get("ref"), "ceiling": q.get("ceiling"), "floor": q.get("floor"),
+        "total_value_bn": round(q["value_bn"], 1) if q.get("value_bn") is not None else None,
+        "foreign_buy_bn": q.get("foreign_buy_bn"), "foreign_sell_bn": q.get("foreign_sell_bn"),
+        "foreign_net_bn": q.get("foreign_net_bn"),
+        "foreign_net_volume": int(fb_vol - fs_vol) if fb_vol is not None and fs_vol is not None else None,
+        "foreign_ownership_pct": round(foreign_own, 2) if foreign_own is not None else None,
+        "foreign_room_left_shares": int(cur_room) if cur_room is not None else None,
+        "foreign_room_left_pct_of_limit": round(cur_room / total_room * 100, 1) if total_room and cur_room is not None else None,
+        "listed_shares": int(listed) if listed else None,
+        "bid_ask": {"bid": [(x["price"], x["volume"]) for x in bid], "ask": [(x["price"], x["volume"]) for x in ask]},
+        "flags": _board_flags(q.get("price"), q.get("ceiling"), q.get("floor"),
+                              bid[0]["volume"] if bid else None, ask[0]["volume"] if ask else None,
+                              q.get("security_status"), q.get("trading_status")),
+    }
+
+
 def get_price_board_snapshot(symbol: str, history_close: Optional[float] = None) -> Optional[dict]:
+    """Ưu tiên: bảng giá Vietcap gọi trực tiếp → bảng giá qua vnstock → dựng lại từ SSI FastConnect."""
     cache_key = f"pb_snapshot_{symbol}"
     cached = get_cache(cache_key, 300)
     if cached:
         return cached
 
     fh = get_foreign_flow_history(symbol, history_close)
-    ok, _ = VNSTOCK.available()
-    raw = _with_timeout(_price_board_raw, 15, symbol) if ok else None
-    if not raw:
-        # Bảng giá vnstock không còn dùng được → dựng ảnh chụp phiên gần nhất từ SSI (nếu có)
-        if fh:
-            snap = _snapshot_from_ssi(fh)
-            snap["foreign_history"] = fh
-            set_cache(cache_key, snap)
-            return snap
+    snap = None
+    q = _with_timeout(_public_quote, 15, symbol)
+    if q and (q.get("price") or q.get("ref")):
+        snap = _snapshot_from_quote(q)
+    if snap is None:
+        ok, _ = VNSTOCK.available()
+        raw = _with_timeout(_price_board_raw, 15, symbol) if ok else None
+        if raw:
+            snap = _snapshot_from_vnstock(raw, history_close)
+        elif fh:
+            snap = _snapshot_from_ssi(fh)  # dựng ảnh chụp phiên gần nhất từ SSI
+    if snap is None:
         return None
+    if fh:
+        snap["foreign_history"] = fh
+    set_cache(cache_key, snap)
+    return snap
 
+
+def _snapshot_from_vnstock(raw: dict, history_close: Optional[float]) -> dict:
     g = raw.get
     match = _f(g("match_price")) or _f(g("close_price"))
     ceiling = _f(g("ceiling")) or _f(g("ceiling_price"))
@@ -183,18 +243,7 @@ def get_price_board_snapshot(symbol: str, history_close: Optional[float] = None)
 
     bid1_vol = _f(g("bid_1_volume")) or _f(g("bid_vol_1"))
     ask1_vol = _f(g("ask_1_volume")) or _f(g("ask_vol_1"))
-    flags = []
-    if match and floor and match <= floor:
-        flags.append("GIÁ ĐANG Ở MỨC SÀN" + (" — dư mua rất mỏng, nguy cơ TRẮNG BÊN MUA (khó thoát hàng)" if not bid1_vol else ""))
-    if match and ceiling and match >= ceiling:
-        flags.append("GIÁ ĐANG Ở MỨC TRẦN" + (" — trắng bên bán (cầu áp đảo)" if not ask1_vol else ""))
-    # security_status 'N' = bình thường; các mã khác (W/C/R/S...) = cảnh báo / kiểm soát / hạn chế / tạm ngừng
-    sec_status = str(g("security_status") or "").strip().upper()
-    trading_status = str(g("trading_status") or "").strip().upper()
-    if sec_status and sec_status not in ("N", "NORMAL", "0", "NONE", "NAN"):
-        flags.append(f"Mã trạng thái chứng khoán '{sec_status}' — có thể thuộc diện cảnh báo/kiểm soát/hạn chế giao dịch, cần kiểm tra trên HOSE/HNX")
-    if trading_status and "ACTIVATED" not in trading_status and trading_status not in ("NORMAL", "NONE", "NAN"):
-        flags.append(f"Trạng thái giao dịch: {trading_status} (có thể đang tạm ngừng/đình chỉ giao dịch)")
+    flags = _board_flags(match, ceiling, floor, bid1_vol, ask1_vol, g("security_status"), g("trading_status"))
 
     acc_val = _f(g("accumulated_value"))
     if acc_val is not None:
@@ -228,9 +277,6 @@ def get_price_board_snapshot(symbol: str, history_close: Optional[float] = None)
         },
         "flags": flags,
     }
-    if fh:
-        snap["foreign_history"] = fh
-    set_cache(cache_key, snap)
     return snap
 
 
@@ -431,8 +477,11 @@ def format_company_dossier(snapshot: Optional[dict], overview: Optional[dict], c
 
     if snapshot:
         lines.append(f"- Tên doanh nghiệp: {snapshot.get('company_name') or 'N/A'} | Nguồn bảng giá: {snapshot.get('source')}")
+        session = str(snapshot.get("session") or "").upper()
+        live_note = f" (phiên {snapshot.get('trading_date')} ĐANG DIỄN RA, trạng thái {session} — số liệu tạm tính)" \
+            if session and session not in ("ENDED", "CLOSED") else ""
         lines.append(
-            f"- Phiên gần nhất: giá {snapshot.get('match_price')} | tham chiếu {snapshot.get('ref_price')} | trần {snapshot.get('ceiling')} | sàn {snapshot.get('floor')} | GTGD {snapshot.get('total_value_bn')} tỷ"
+            f"- Phiên gần nhất{live_note}: giá {snapshot.get('match_price')} | tham chiếu {snapshot.get('ref_price')} | trần {snapshot.get('ceiling')} | sàn {snapshot.get('floor')} | GTGD {snapshot.get('total_value_bn')} tỷ"
         )
         if snapshot.get("foreign_net_bn") is not None:
             lines.append(
@@ -446,7 +495,8 @@ def format_company_dossier(snapshot: Optional[dict], overview: Optional[dict], c
             )
         ba = snapshot.get("bid_ask") or {}
         if ba.get("bid"):
-            fmt = lambda arr: ", ".join(f"{p:,.0f}×{v:,.0f}" for p, v in arr if p and v)  # noqa: E731
+            fmt = lambda arr: ", ".join(f"{p:,.2f}×{v:,.0f}" if p < 1000 else f"{p:,.0f}×{v:,.0f}"  # noqa: E731
+                                        for p, v in arr if p and v)
             lines.append(f"- Sổ lệnh cuối phiên: Dư mua [{fmt(ba['bid']) or 'trống'}] | Dư bán [{fmt(ba['ask']) or 'trống'}]")
         fh = snapshot.get("foreign_history")
         if fh:

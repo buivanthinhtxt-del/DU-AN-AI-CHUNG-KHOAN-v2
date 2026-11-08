@@ -1055,3 +1055,36 @@ input:focus {
   .plan-table td:first-child { white-space: normal; }
   input { width: 100%; }
 }
+
+/* ===== Bảng giá trực tiếp (LiveQuote) ===== */
+.live-quote { padding: 1rem 1.25rem; text-align: left; }
+.lq-header { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.9rem; }
+.lq-title { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; color: var(--text-active); flex-wrap: wrap; }
+.lq-name { color: var(--text-secondary); font-weight: 500; font-size: 0.85rem; }
+.lq-status { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.75rem; color: var(--text-secondary); }
+.lq-tag { font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-primary); }
+.lq-tag-live { border-color: rgba(16, 185, 129, 0.5); color: var(--up-color); }
+.lq-live-dot { color: var(--up-color); animation: lq-pulse 1.6s ease-in-out infinite; }
+@keyframes lq-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.lq-error { color: var(--accent-gold); font-size: 0.85rem; }
+.lq-body { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.4fr); gap: 1.25rem; }
+.lq-price { font-family: var(--font-mono); font-size: 2.2rem; font-weight: 700; line-height: 1.1; }
+.lq-change { font-family: var(--font-mono); font-size: 0.95rem; margin: 0.2rem 0 0.6rem; }
+.lq-refs { display: flex; gap: 0.9rem; flex-wrap: wrap; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.7rem; }
+.lq-refs b { font-family: var(--font-mono); }
+.lq-stats { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.75rem; font-size: 0.8rem; color: var(--text-secondary); }
+.lq-stats b { font-family: var(--font-mono); color: var(--text-active); font-weight: 600; text-align: right; }
+.lq-stats small { color: var(--text-secondary); font-weight: 400; }
+.lq-book table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 0.8rem; }
+.lq-book th { font-family: var(--font-main); font-weight: 500; color: var(--text-secondary); font-size: 0.7rem; padding: 0.2rem 0.4rem; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.lq-book td { padding: 0.25rem 0.4rem; text-align: right; color: var(--text-primary); border-bottom: 1px solid rgba(255, 255, 255, 0.03); }
+.lq-book td:nth-child(3), .lq-book td:nth-child(4) { text-align: left; }
+.lq-foreign { margin-top: 0.8rem; }
+.lq-foreign-title { font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.3rem; }
+.lq-chart-title { margin-top: 1rem; font-size: 0.75rem; color: var(--text-secondary); }
+.lq-chart { width: 100%; height: 190px; margin-top: 0.3rem; }
+.lq-note { margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); line-height: 1.4; }
+@media (max-width: 760px) {
+  .lq-body { grid-template-columns: 1fr; }
+  .lq-price { font-size: 1.8rem; }
+}

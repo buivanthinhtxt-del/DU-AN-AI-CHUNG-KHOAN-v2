@@ -30,12 +30,13 @@ from dotenv import load_dotenv
 import pandas as pd
 
 import hashlib
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 
 from data_fetcher import get_historical_data, get_peers_performance, get_stock_sector, calculate_indicators
 from news_fetcher import get_latest_news
 from ai_analyzer import analyze_stock_data, MARKET_INDICES
-from data_sources import get_source_info, check_sources, provider_chain
+from data_sources import PUBLIC, get_source_info, check_sources, market_session, provider_chain
 from fundamental_fetcher import (
     get_price_board_snapshot,
     get_company_overview,
@@ -322,6 +323,48 @@ async def api_data_sources_health(symbol: str = "HPG"):
     except Exception as e:
         logger.error(f"[!] Lỗi kiểm tra nguồn dữ liệu: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Không kiểm tra được nguồn dữ liệu.")
+
+
+# --- Thời gian thực (API công khai, không chính thức: bảng giá Vietcap + nến trong phiên DNSE/VNDirect/SSI iBoard) ---
+_SYMBOL_RE = re.compile(r"^[A-Z0-9]{2,12}$")
+
+
+@app.get("/api/realtime/quote")
+async def api_realtime_quote(symbols: str = "HPG"):
+    """Bảng giá tức thời cho tối đa 30 mã (phân tách bằng dấu phẩy). Giá: nghìn đồng; giá trị: tỷ đồng."""
+    syms = [s.strip().upper() for s in symbols.split(",") if s.strip()][:30]
+    bad = [s for s in syms if not _SYMBOL_RE.match(s)]
+    if not syms or bad:
+        raise HTTPException(status_code=400, detail=f"Mã không hợp lệ: {', '.join(bad) or '(trống)'}")
+    try:
+        quotes = await asyncio.to_thread(PUBLIC.price_board, syms)
+    except Exception as e:
+        logger.warning(f"[realtime] bảng giá lỗi: {e}")
+        raise HTTPException(status_code=502, detail="Không lấy được bảng giá trực tiếp (nguồn Vietcap đang lỗi hoặc bị chặn).")
+    return {"quotes": quotes, "missing": [s for s in syms if s not in quotes],
+            "market": market_session(), "source": "vci"}
+
+
+@app.get("/api/realtime/intraday/{symbol}")
+async def api_realtime_intraday(symbol: str, resolution: str = "1"):
+    """Nến trong phiên gần nhất. `time` = giờ Việt Nam ghi như UTC (để biểu đồ hiển thị đúng giờ VN)."""
+    sym = symbol.upper().strip()
+    if not _SYMBOL_RE.match(sym):
+        raise HTTPException(status_code=400, detail="Mã không hợp lệ")
+    if resolution not in PUBLIC.INTRADAY_RESOLUTIONS:
+        raise HTTPException(status_code=400, detail=f"Khung chỉ nhận: {', '.join(PUBLIC.INTRADAY_RESOLUTIONS)} (phút)")
+    try:
+        df = await asyncio.to_thread(PUBLIC.intraday, sym, resolution)
+    except Exception as e:
+        logger.warning(f"[realtime] nến trong phiên {sym} lỗi: {e}")
+        raise HTTPException(status_code=502, detail="Không lấy được nến trong phiên từ các nguồn công khai.")
+    bars = [
+        {"time": int(ts.replace(tzinfo=timezone.utc).timestamp()), "open": float(r.Open), "high": float(r.High),
+         "low": float(r.Low), "close": float(r.Close), "volume": float(r.Volume or 0)}
+        for ts, r in df.iterrows()
+    ] if not df.empty else []
+    return {"symbol": sym, "resolution": resolution, "date": df.index[-1].strftime("%Y-%m-%d") if bars else None,
+            "bars": bars, "source": df.attrs.get("endpoint") if bars else None, "market": market_session()}
 
 
 # --- Watchlist APIs (hoàn toàn non-blocking với asyncio.to_thread) ---

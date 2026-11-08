@@ -1,5 +1,5 @@
 """
-Kiểm tra sức khỏe từng nguồn dữ liệu giá (SSI FastConnect / vnstock / kho cục bộ).
+Kiểm tra sức khỏe từng nguồn dữ liệu giá (SSI FastConnect / từng API công khai / vnstock / kho cục bộ).
 
     .venv/Scripts/python.exe backend/tools/check_data_sources.py          # mặc định HPG
     .venv/Scripts/python.exe backend/tools/check_data_sources.py FPT
@@ -28,7 +28,7 @@ def main():
             if r.get("ok") else (r.get("error") or r.get("detail") or "")
         )
         lat = f" ({r['latency_s']}s)" if "latency_s" in r else ""
-        print(f"{mark} {r['source']:<8} {detail}{lat}")
+        print(f"{mark} {r['source']:<18} {detail}{lat}")
 
 
 if __name__ == "__main__":

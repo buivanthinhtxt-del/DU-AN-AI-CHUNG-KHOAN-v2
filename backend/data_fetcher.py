@@ -125,7 +125,8 @@ def get_historical_data(symbol: str, days: int = 365, target_date: str = None, i
     start_date = end_date - timedelta(days=days)
     clean_symbol = symbol.upper().strip().replace('.VN', '')
 
-    # Chuỗi nguồn dự phòng: SSI FastConnect (chính thức) → vnstock → kho CSV cục bộ (xem data_sources.py)
+    # Chuỗi nguồn dự phòng: SSI FastConnect (chính thức) → API công khai các CTCK → vnstock → kho CSV cục bộ
+    # (xem data_sources.py)
     from data_sources import fetch_history
     df = fetch_history(clean_symbol, start_date, end_date)
     if df is None or df.empty:
