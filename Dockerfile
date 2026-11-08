@@ -43,7 +43,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copy backend source code, demo page, and pre-compiled React frontend
 COPY --chown=user:user backend/ ./backend/
-COPY --chown=user:user fiintrade_demo.html ./fiintrade_demo.html
+COPY --chown=user:user web/public/fiintrade_demo.html ./fiintrade_demo.html
 COPY --chown=user:user --from=web-builder /app/web/dist ./web/dist
 
 # Ensure proper write permissions for cache, data directory, and home directory
