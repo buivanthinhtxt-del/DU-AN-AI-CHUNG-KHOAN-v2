@@ -182,10 +182,16 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-# === Bao mat & runtime (them boi Claude) ===
+# === Bao mat & runtime ===
 # File chua API key - TUYET DOI khong len git
 api key.ini
 **/api key.ini
-# Database watchlist (du lieu chay) - khong can theo doi
+# Database watchlist & cache (du lieu chay) - khong can theo doi
 antigravity.db
 *.db
+**/.cache/
+.claude/
+web/node_modules/
+web/dist/
+# Kho giá cục bộ (tự sinh, có thể tải lại bằng backend/tools/backfill_local_store.py)
+backend/data/ohlcv/

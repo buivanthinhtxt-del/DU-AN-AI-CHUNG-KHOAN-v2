@@ -1,18 +1,21 @@
 @echo off
-echo [*] Dang khoi dong AI Stock Analyzer...
+chcp 65001 > nul
+set "ROOT_DIR=%~dp0"
+echo [*] Đang khởi động AI Stock Analyzer (Antigravity WallStreet AI)...
 
-:: Chay Backend trong cua so moi
-start cmd /k "echo [*] Dang chay Backend (FastAPI)... && .venv\Scripts\python.exe -m uvicorn api:app --host 0.0.0.0 --port 8000 --reload"
+:: Chạy Backend (FastAPI) từ thư mục backend/
+start "Backend - FastAPI (8000)" cmd /k "cd /d "%ROOT_DIR%backend" && "%ROOT_DIR%.venv\Scripts\python.exe" -m uvicorn api:app --host 0.0.0.0 --port 8000 --reload"
 
-:: Cho 3 giay de Backend khoi dong truoc
-timeout /t 3 /nobreak > nul
+:: Chờ 3 giây để Backend khởi động trước
+ping 127.0.0.1 -n 4 > nul
 
-:: Chay Frontend trong cua so moi
-start cmd /k "echo [*] Dang chay Frontend (Vite)... && cd web && npm run dev"
+:: Chạy Frontend (Vite) từ thư mục web/
+start "Frontend - Vite (5173)" cmd /k "cd /d "%ROOT_DIR%web" && npm run dev"
 
 echo.
-echo [+] He thong dang duoc khoi dong!
-echo [+] Dia chi truy cap: http://localhost:5173/
-echo [!] Luu y: Khong dong cac cua so lenh dang chay.
+echo [+] Hệ thống đang được khởi động!
+echo [+] Backend API: http://localhost:8000/docs
+echo [+] Frontend UI: http://localhost:5173/
+echo [!] Lưu ý: Không đóng 2 cửa sổ lệnh đang chạy.
 echo.
 pause

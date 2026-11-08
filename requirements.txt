@@ -1,9 +1,0 @@
-fastapi
-uvicorn[standard]
-yfinance
-pandas
-requests
-python-dotenv
-google-generativeai
-tabulate
-vnstock
