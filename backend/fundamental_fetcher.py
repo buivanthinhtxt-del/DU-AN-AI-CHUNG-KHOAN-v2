@@ -60,7 +60,10 @@ def _f(x) -> Optional[float]:
 # 1. Bảng giá phiên gần nhất
 # ----------------------------------------------------------------------------------------------
 def _price_board_raw(symbol: str) -> Optional[dict]:
-    from vnstock.api.trading import Trading
+    try:
+        from vnstock.api.trading import Trading
+    except ImportError:
+        return None
 
     for src in ("vci", "kbs"):
         try:
@@ -284,7 +287,10 @@ def _snapshot_from_vnstock(raw: dict, history_close: Optional[float]) -> dict:
 # 2. Hồ sơ công ty
 # ----------------------------------------------------------------------------------------------
 def _overview_raw(symbol: str) -> Optional[dict]:
-    from vnstock.api.company import Company
+    try:
+        from vnstock.api.company import Company
+    except ImportError:
+        return None
 
     for src in ("kbs", "vci"):
         try:
@@ -349,7 +355,10 @@ def _df_brief(df, max_rows=35, max_cols=7, max_chars=2600) -> Optional[str]:
 
 
 def _financials_raw(symbol: str) -> Optional[dict]:
-    from vnstock.api.financial import Finance
+    try:
+        from vnstock.api.financial import Finance
+    except ImportError:
+        return None
 
     for src in ("kbs", "vci"):
         try:

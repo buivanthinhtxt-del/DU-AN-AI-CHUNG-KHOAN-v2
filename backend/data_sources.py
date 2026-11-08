@@ -292,7 +292,10 @@ class VnstockProvider:
         return True, "ok"
 
     def _fetch(self, symbol: str, start: str, end: str) -> pd.DataFrame:
-        from vnstock.api.quote import Quote  # import trễ: thư viện có thể bị vô hiệu sau 10/11/2026
+        try:
+            from vnstock.api.quote import Quote  # import trễ: thư viện có thể bị vô hiệu sau 10/11/2026
+        except ImportError:
+            raise RuntimeError("Thư viện vnstock không khả dụng (hệ thống tự động sử dụng chuỗi nguồn public / ssi)")
 
         errors, raised = [], False
         for src in self.SOURCES:
