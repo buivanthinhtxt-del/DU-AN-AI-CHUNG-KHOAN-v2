@@ -1,0 +1,59 @@
+# Version control
+.git
+.gitignore
+
+# Internal agent workflows & temporary states
+.agents/
+.agents
+.claude/
+.claude
+
+# Virtual environments
+.venv/
+.venv
+venv/
+venv
+env/
+env
+
+# Python compilation & test caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Sensitive environment variables & secrets
+.env
+.env.*
+api key.ini
+**/api key.ini
+*.pem
+*.key
+
+# Local SQLite databases
+*.db
+*.sqlite3
+
+# Node modules & frontend build artifacts (built inside Docker Stage 1)
+node_modules/
+**/node_modules/
+web/node_modules/
+web/dist/
+dist/
+
+# Backend temporary caches & test audit logs
+backend/cache/
+backend/cache/*
+backend/cache/forecast_audit/*.json
+backend/cache/market_data*
+backend/cache/ai_report*
+backend/data/ohlcv/*.csv
+
+# Temporary files & logs
+*.log
+tmp/
+.DS_Store
+Thumbs.db

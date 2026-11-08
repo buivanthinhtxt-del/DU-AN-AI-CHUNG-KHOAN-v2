@@ -23,8 +23,12 @@ except Exception:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("api")
 
-from fastapi import FastAPI, HTTPException
+import time
+from collections import defaultdict
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import pandas as pd
@@ -35,7 +39,7 @@ from datetime import datetime, timezone
 
 from data_fetcher import get_historical_data, get_peers_performance, get_stock_sector, calculate_indicators
 from news_fetcher import get_latest_news
-from ai_analyzer import analyze_stock_data, MARKET_INDICES
+from ai_analyzer import analyze_stock_data, MARKET_INDICES, build_analysis_context, _rule_based_report
 from data_sources import PUBLIC, get_source_info, check_sources, market_session, provider_chain
 from fundamental_fetcher import (
     get_price_board_snapshot,
@@ -43,6 +47,7 @@ from fundamental_fetcher import (
     get_financial_statements,
     research_fundamentals_web,
 )
+from forecast_audit import audit_historical_forecast, save_forecast_audit
 from macro_fetcher import get_macro_data
 from cache_manager import get_cache, set_cache
 from database import init_db, get_watchlist, add_watchlist, remove_watchlist
@@ -64,7 +69,48 @@ ROOT_DIR = BASE_DIR.parent
 load_dotenv(ROOT_DIR / ".env")
 load_dotenv(BASE_DIR / ".env")
 
-app = FastAPI(title="Antigravity Workstation API V2")
+app = FastAPI(title="Nghiep Vu AI Workstation V5.0")
+
+# --- Bộ giới hạn tần suất gọi AI theo IP (Bảo vệ hạn mức GEMINI_API_KEY khi mở Web Free 24/7) ---
+AI_RATE_LIMIT_PER_HOUR = int(os.getenv("AI_RATE_LIMIT_PER_HOUR", "25"))
+_ip_ai_timestamps: dict[str, list[float]] = defaultdict(list)
+
+
+def _get_client_ip(request: Optional[Request]) -> str:
+    if request is None:
+        return "local"
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _check_ai_rate_limit(request: Optional[Request]):
+    ip = _get_client_ip(request)
+    if ip in ("127.0.0.1", "::1", "localhost", "local", "testclient"):
+        return
+    now = time.time()
+    window = 3600.0
+    history = [ts for ts in _ip_ai_timestamps[ip] if now - ts < window]
+    if len(history) >= AI_RATE_LIMIT_PER_HOUR:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Bạn đã sử dụng hết {AI_RATE_LIMIT_PER_HOUR} lượt phân tích AI chuyên sâu miễn phí trong 1 giờ qua. Vui lòng xem bản Định lượng 6 bước tức thì hoặc thử lại sau ít phút.",
+        )
+    history.append(now)
+    _ip_ai_timestamps[ip] = history
+
+
+@app.api_route("/api/health", methods=["GET", "HEAD"])
+async def api_health():
+    """Endpoint kiểm tra trạng thái sống 24/7 cho Render / Hugging Face Spaces / UptimeRobot."""
+    return {
+        "status": "ok",
+        "service": "nghiep-vu-ai-workstation-v5",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 # [P0-SEC-01] Cấu hình CORS chuẩn RFC 6454: chỉ định danh sách Origin tin cậy, không dùng wildcard "*" khi có credentials
 cors_origins_env = os.getenv("ALLOWED_ORIGINS", "")
@@ -151,6 +197,7 @@ async def fetch_market_data(req: AnalyzeRequest):
             asyncio.to_thread(get_historical_data, symbol, days, target_date, True),
             asyncio.to_thread(get_peers_performance, symbol, target_date),
             asyncio.to_thread(get_latest_news, symbol),
+            asyncio.to_thread(get_historical_data, "VNINDEX", 400, target_date, True),
         ]
         if not macro_cached:
             tasks.append(asyncio.to_thread(get_macro_data, target_date, False))
@@ -163,11 +210,12 @@ async def fetch_market_data(req: AnalyzeRequest):
 
         peers_info = results[1] if not isinstance(results[1], Exception) and results[1] else {}
         news_items = results[2] if not isinstance(results[2], Exception) and results[2] else []
+        vnindex_df = results[3] if len(results) > 3 and not isinstance(results[3], Exception) else None
 
         if macro_cached:
             macro_info = macro_cached
         else:
-            macro_res = results[3] if len(results) > 3 and not isinstance(results[3], Exception) else None
+            macro_res = results[4] if len(results) > 4 and not isinstance(results[4], Exception) else None
             macro_info = macro_res or {"VNINDEX": "N/A", "VN30": "N/A", "GOLD": "N/A", "OIL": "N/A", "USD_VND": "N/A"}
             set_cache(macro_cache_key, macro_info)
 
@@ -179,10 +227,44 @@ async def fetch_market_data(req: AnalyzeRequest):
 
         historical_records = _df_to_clean_records(df)
         latest_row = historical_records[-1] if historical_records else {}
+        sector_name = get_stock_sector(symbol)
+
+        # Tính nhanh Báo cáo Định lượng Tức thì (Instant Quant Baseline) để giao diện hiển thị ngay lập tức (<1s)
+        instant_report = None
+        try:
+            last_close = float(df["Close"].iloc[-1])
+            last_date_str = df.index[-1].strftime("%Y-%m-%d") if not df.empty else None
+            audit_res = await asyncio.to_thread(audit_historical_forecast, symbol, last_close, last_date_str)
+            mk_dfs = {"VNINDEX": vnindex_df} if (vnindex_df is not None and not vnindex_df.empty) else {}
+            profile = {
+                "horizon": req.horizon,
+                "risk_profile": req.risk_profile,
+                "cost_basis": req.cost_basis,
+                "position_pct": req.position_pct,
+            }
+            ctx = await asyncio.to_thread(
+                build_analysis_context,
+                symbol=symbol,
+                df=df,
+                news_items=news_items,
+                peers_info=peers_info,
+                macro_info=macro_info,
+                market_data=mk_dfs,
+                profile=profile,
+                extras={"data_source": get_source_info(symbol), "forecast_audit": audit_res},
+                historical=bool(target_date),
+            )
+            instant_report = await asyncio.to_thread(
+                _rule_based_report,
+                ctx,
+                "Bản Phân tích Định lượng Tức thì (Đang chạy thẩm định sâu bằng Hội đồng AI...)",
+            )
+        except Exception as qe_err:
+            logger.warning(f"[!] Lỗi tạo instant_report cho {symbol}: {qe_err}")
 
         payload = {
             "symbol": symbol,
-            "sector": get_stock_sector(symbol),
+            "sector": sector_name,
             "target_date": target_date,
             "history": historical_records,
             "indicators": {
@@ -200,6 +282,7 @@ async def fetch_market_data(req: AnalyzeRequest):
             "peers": peers_info,
             "news": news_items,
             "data_source": get_source_info(symbol),
+            "instant_report": instant_report,
         }
 
         set_cache(cache_key, payload)
@@ -214,7 +297,7 @@ async def fetch_market_data(req: AnalyzeRequest):
 
 
 @app.post("/api/ai_report")
-async def fetch_ai_report(req: AnalyzeRequest):
+async def fetch_ai_report(req: AnalyzeRequest, request: Request = None):
     symbol = req.symbol.upper().strip()
     target_date = req.target_date
 
@@ -230,6 +313,9 @@ async def fetch_ai_report(req: AnalyzeRequest):
         cached_report = get_cache(cache_key, 6 * 3600)  # 6 giờ
         if cached_report:
             return cached_report
+
+    # Kiểm tra giới hạn lượt gọi AI trực tiếp theo IP khi không có sẵn trong Cache
+    _check_ai_rate_limit(request)
 
     try:
         mk_cache_key = f"market_data_v3_{symbol}_{target_date}"
@@ -281,6 +367,10 @@ async def fetch_ai_report(req: AnalyzeRequest):
         if vn30_res is not None and not vn30_res.empty:
             market_index_dfs["VN30"] = vn30_res
 
+        # Tự động đọc và đối chiếu dự báo cũ (Forecast Audit Self-Correction Loop)
+        last_date_str = df.index[-1].strftime("%Y-%m-%d") if not df.empty else None
+        audit_res = await asyncio.to_thread(audit_historical_forecast, symbol, last_close, last_date_str)
+
         # [P0-PERF-01] Gọi analyze_stock_data qua asyncio.to_thread (giải phóng Event Loop trong khi gọi Gemini)
         analysis_json_str = await asyncio.to_thread(
             analyze_stock_data,
@@ -292,12 +382,18 @@ async def fetch_ai_report(req: AnalyzeRequest):
             market_data=market_index_dfs,
             profile=profile,
             extras={"snapshot": snapshot, "overview": overview, "financials": financials, "research": research,
-                    "data_source": mk_data.get("data_source")},
+                    "data_source": mk_data.get("data_source"), "forecast_audit": audit_res},
             historical=historical,
         )
 
         ai_data = json.loads(analysis_json_str)
-        payload = {"ai_report": ai_data}
+        # Gắn thẻ đối chiếu dự báo cũ vào ai_data và payload phản hồi
+        if "forecast_audit" not in ai_data or not ai_data.get("forecast_audit"):
+            ai_data["forecast_audit"] = audit_res
+        payload = {"ai_report": ai_data, "forecast_audit": audit_res}
+
+        # Tự động lưu bản ghi dự báo gốc mới vào cache forecast_audit
+        await asyncio.to_thread(save_forecast_audit, symbol, ai_data, last_close, last_date_str)
 
         # Chỉ lưu cache khi báo cáo do AI tạo (bản định lượng dự phòng sẽ được thử lại AI ở lần sau)
         if str(ai_data.get("engine", "")).startswith("gemini:"):
@@ -399,13 +495,14 @@ async def api_remove_watchlist(symbol: str):
 
 # --- AI Gemini Real-time Search & Chat API (Non-blocking) ---
 @app.post("/api/chat")
-async def api_chat_query(req: ChatRequest):
+async def api_chat_query(req: ChatRequest, request: Request = None):
     """
     Endpoint tra cứu thông tin chứng khoán thời gian thực với AI Gemini và Google Search Grounding.
     Tự động gắn kết bối cảnh cổ phiếu đang theo dõi, tin tức tài chính và dữ liệu vĩ mô.
     """
     if not req.message or not req.message.strip():
         raise HTTPException(status_code=400, detail="Nội dung câu hỏi không được để trống.")
+    _check_ai_rate_limit(request)
     try:
         result = await asyncio.to_thread(
             query_gemini_chat,
@@ -419,6 +516,43 @@ async def api_chat_query(req: ChatRequest):
         raise HTTPException(status_code=500, detail="Không thể hoàn thành tra cứu AI vào lúc này.")
 
 
+# --- PHỤC VỤ GIAO DIỆN WEB REACT TÍCH HỢP (ALL-IN-ONE CLOUD WORKSTATION) ---
+WEB_DIST_DIR = ROOT_DIR / "web" / "dist"
+if (WEB_DIST_DIR / "assets").is_dir():
+    app.mount("/assets", StaticFiles(directory=str(WEB_DIST_DIR / "assets")), name="web_assets")
+
+
+@app.get("/fiintrade_demo.html", include_in_schema=False)
+async def serve_demo_html():
+    demo_dist = WEB_DIST_DIR / "fiintrade_demo.html"
+    if demo_dist.is_file():
+        return FileResponse(str(demo_dist))
+    demo_root = ROOT_DIR / "fiintrade_demo.html"
+    if demo_root.is_file():
+        return FileResponse(str(demo_root))
+    raise HTTPException(status_code=404, detail="Không tìm thấy trang fiintrade_demo.html")
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_spa_frontend(full_path: str):
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="API endpoint không tồn tại.")
+    if WEB_DIST_DIR.is_dir():
+        candidate = (WEB_DIST_DIR / full_path).resolve()
+        if str(candidate).startswith(str(WEB_DIST_DIR.resolve())) and candidate.is_file():
+            return FileResponse(str(candidate))
+        index_file = WEB_DIST_DIR / "index.html"
+        if index_file.is_file():
+            return FileResponse(str(index_file))
+    return {
+        "service": "Nghiệp Vụ AI Workstation V5.0 API",
+        "status": "running",
+        "docs": "/docs",
+        "health": "/api/health",
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run("api:app", host="0.0.0.0", port=port, reload=False)

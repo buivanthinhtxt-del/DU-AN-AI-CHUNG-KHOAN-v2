@@ -186,12 +186,53 @@ cython_debug/
 # File chua API key - TUYET DOI khong len git
 api key.ini
 **/api key.ini
+*.env
+.env
+.env.*
+!.env.example
+
 # Database watchlist & cache (du lieu chay) - khong can theo doi
 antigravity.db
 *.db
-**/.cache/
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+
+# === Agent Internal Workspace (Never track agent metadata) ===
+.agents/
+.agents/**
+**/.agents/
 .claude/
-web/node_modules/
-web/dist/
+
+# === Cache, Test Audits & Runtime Data ===
+backend/cache/
+backend/cache/**
+backend/cache/*
+**/cache/
+**/.cache/
+*.cache
+backend/cache/forecast_audit/*.json
+backend/cache/forecast_audit/
 # Kho giá cục bộ (tự sinh, có thể tải lại bằng backend/tools/backfill_local_store.py)
 backend/data/ohlcv/
+
+# === Node modules and build output ===
+node_modules/
+web/node_modules/
+web/dist/
+dist/
+
+# === OS & Editor files ===
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === Temporary & Scratch Artifacts ===
+fiintrade_demo.html
+*.log
+*.tmp
+*.bak
+

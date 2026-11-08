@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: nghiep-vu-ai-workstation
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AI_RATE_LIMIT_PER_HOUR
+        value: "25"
+      - key: PYTHONUTF8
+        value: "1"
+

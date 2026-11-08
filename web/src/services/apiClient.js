@@ -1,4 +1,20 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+function resolveApiBaseUrl() {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined') {
+    const { hostname, port } = window.location;
+    // Khi chạy Vite dev server ở máy cá nhân (port 5173/5174), trỏ về cổng 8000 của FastAPI
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && port && port !== '8000' && port !== '7860') {
+      return 'http://127.0.0.1:8000';
+    }
+    // Khi chạy trên Cloud (Render / Hugging Face / Railway) hoặc chung cổng với FastAPI: gọi đường dẫn tương đối cùng domain
+    return '';
+  }
+  return 'http://127.0.0.1:8000';
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export async function getWatchlist() {
   try {

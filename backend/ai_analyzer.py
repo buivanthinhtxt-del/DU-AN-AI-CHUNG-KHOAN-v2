@@ -318,18 +318,30 @@ def build_analysis_context(symbol: str, df: pd.DataFrame, news_items: list = Non
     df = calculate_indicators(df[ohlcv].astype(float))
     idx_df = (market_data or {}).get("VNINDEX")
     vn30_df = (market_data or {}).get("VN30")
-    quant = qe.build_quant_profile(df, idx_df, prof["risk_profile"], prof["cost_basis"])
+    quant = qe.build_quant_profile(
+        df, idx_df, prof["risk_profile"], prof["cost_basis"],
+        symbol=symbol, snapshot=extras.get("snapshot"),
+    )
     market = qe.market_regime(idx_df, vn30_df)
     sector = get_stock_sector(symbol)
     ranking = qe.sector_ranking(symbol, quant["returns"]["1m"], quant["returns"]["3m"], peers_info or {})
     dq = assess_data_quality(df, market, ranking, extras.get("snapshot"), extras.get("financials"),
                              extras.get("research"), news_items or [], symbol, historical, extras.get("data_source"))
+    fa = extras.get("forecast_audit")
+    if fa is None and hasattr(qe, "audit_historical_forecast"):
+        try:
+            last_date_str = df.index[-1].strftime("%Y-%m-%d") if not df.empty else None
+            last_close = quant.get("close", 0.0)
+            fa = qe.audit_historical_forecast(symbol, last_close, last_date_str)
+        except Exception:
+            fa = None
+
     return {
         "symbol": symbol, "df": df, "sector": sector, "profile": prof, "quant": quant, "market": market,
         "ranking": ranking, "peers": peers_info or {}, "macro": macro_info or {}, "news": news_items or [],
         "snapshot": extras.get("snapshot"), "overview": extras.get("overview"),
         "financials": extras.get("financials"), "research": extras.get("research"),
-        "data_quality": dq, "historical": historical,
+        "data_quality": dq, "historical": historical, "forecast_audit": fa,
     }
 
 
@@ -365,6 +377,23 @@ def build_user_prompt(ctx: dict) -> str:
         + "\n".join(f"- Thiếu/hạn chế: {g}" for g in dq["gaps"])
     )
 
+    fa = ctx.get("forecast_audit")
+    if fa and isinstance(fa, dict):
+        if fa.get("summary_for_prompt"):
+            fa_txt = fa["summary_for_prompt"]
+        elif fa.get("has_history") and fa.get("last_audit"):
+            la = fa["last_audit"]
+            fa_txt = (
+                f"- Lần dự báo trước: Ngày {la.get('forecast_date')} tại giá {la.get('as_of_price')} (Kỳ vọng: {la.get('predicted_direction')}, Mục tiêu: {la.get('predicted_target')})\n"
+                f"- Kết quả đối chiếu với giá hiện tại {la.get('actual_price')} ({la.get('price_change_pct', 0.0):+.1f}%): Đánh giá [{la.get('verdict')}] (Độ chính xác {la.get('overall_accuracy_pct')}%)\n"
+                f"  • Hướng: {la.get('direction_score')} | Biên độ: {la.get('amplitude_score')} | Thời điểm: {la.get('time_score')} | Điều kiện: {la.get('condition_score')}\n"
+                f"- Bài học kinh nghiệm: {la.get('lessons_learned')}"
+            )
+        else:
+            fa_txt = "- Chưa có dữ liệu đối chiếu dự báo cũ cho mã này (lần đầu tạo hồ sơ hoặc chưa có bản ghi trước)."
+    else:
+        fa_txt = "- Chưa có dữ liệu đối chiếu dự báo cũ cho mã này (lần đầu tạo hồ sơ hoặc chưa có bản ghi trước)."
+
     values = {
         "symbol": ctx["symbol"],
         "investor_profile": _profile_text(prof, close),
@@ -379,11 +408,14 @@ def build_user_prompt(ctx: dict) -> str:
         "quant": qe.format_quant_dossier(q),
         "price_table": price_table,
         "news": "\n".join(ctx["news"][:10]) if ctx["news"] else "- Không có tin tức mới.",
+        "forecast_audit": fa_txt,
         "question": (
-            f"Lập báo cáo đầu tư chuyên sâu cho {ctx['symbol']} theo khung 5.A–5.J và mẫu mục 7. Bắt đầu bằng kết luận; "
-            f"mọi nhận định phải trích số liệu từ dữ liệu trên; dùng đúng các vùng giá do hệ thống tính; xuất phát từ kế hoạch "
-            f"giao dịch cơ sở và giải thích nếu điều chỉnh; áp dụng quy tắc phủ quyết rủi ro; độ tin cậy không vượt "
-            f"'{dq['max_confidence']}'. Dự báo 4 mốc days_future = 1, 2, 5, 10 trong dải thống kê."
+            f"Lập báo cáo đầu tư chuyên sâu cho {ctx['symbol']} theo chuẩn Version 5.0 (Kiến trúc Phễu Kiểm Chứng 2 Tầng: "
+            f"Thực chiến T+2,5 & Đọc vị Tạo lập × Kiểm chứng Giả thuyết CFA). Đóng khung các mốc quan trọng trong bảng "
+            f"(T+1, T+2.5, T+5, T+10, Pivot, 3 Stops, 95% range); chỉ gắn 6 nhãn kiểm chứng ([Nguồn], [Tính toán], [Suy luận], "
+            f"[Giả định], [Chưa xác định], [Mâu thuẫn nguồn]) ở các câu kết luận then chốt; tích hợp Ma trận 6 giả thuyết, "
+            f"Bộ 3 chốt chặn (Price-Stop, Thesis-Stop, Time-Stop), đối chiếu dự báo cũ và kết thúc bằng 3 câu hỏi tự kiểm tra. "
+            f"Độ tin cậy không vượt '{dq['max_confidence']}'."
         ),
     }
     template = load_prompt_parts()["user"]
@@ -580,7 +612,14 @@ def _postprocess(rep: dict, ctx: dict, engine: str) -> dict:
         "resistances": q["levels"]["resistances"],
         "base_rates": q.get("base_rates"),
         "returns": q["returns"],
+        "tactical_6step": q.get("tactical_6step"),
+        "exit_stops": q.get("exit_stops") or (q.get("tactical_6step") or {}).get("exit_stops"),
+        "causal_hypotheses": q.get("causal_hypotheses"),
+        "market_layers": q.get("market_layers"),
+        "atc_analysis": q.get("atc_analysis"),
     }
+    if "forecast_audit" not in rep or not rep.get("forecast_audit"):
+        rep["forecast_audit"] = ctx.get("forecast_audit")
     return rep
 
 
@@ -600,6 +639,25 @@ def _rule_based_report(ctx: dict, reason: str) -> dict:
     snap = ctx.get("snapshot") or {}
     br = (q.get("base_rates") or {}).get("results", {})
     br20 = br.get("20") or br.get("10")
+
+    t6 = q.get("tactical_6step") or {}
+    arch = t6.get("archetype") or {}
+    arch_name = arch.get("name") or "Cổ phiếu sản xuất cơ bản & Nội tại thật"
+    arch_rule = arch.get("core_rule") or "Mua gom tại nền tích lũy cạn cung No Supply"
+
+    ex_stops = bp.get("exit_stops") or q.get("exit_stops") or {}
+    p_stop = ex_stops.get("price_stop") or {}
+    th_stop = ex_stops.get("thesis_stop") or {}
+    tm_stop = ex_stops.get("time_stop") or {}
+    price_stop_val = _vn(p_stop.get("price") or bp["stop_loss"])
+    price_stop_pct = _vn(p_stop.get("pct") or bp["stop_pct"])
+    thesis_stop_cond = th_stop.get("condition") or f"Gãy MA50 hoặc đóng cửa dưới {_vn(bp['stop_loss'])}"
+    time_stop_act = tm_stop.get("action") or bp["time_stop"]
+
+    atc = q.get("atc_analysis") or {}
+    clv_val = _vn(atc.get("clv", 0.5))
+    atc_eval = atc.get("evaluation", "Giao dịch bình thường")
+    exp_warn = f" (⚠️ {atc['expiration_warning']})" if atc.get("expiration_warning") else ""
 
     # --- Điểm số
     macro_s = 70 if market_green else 32 if market_red else 52
@@ -680,35 +738,92 @@ def _rule_based_report(ctx: dict, reason: str) -> dict:
     )
     flags = "".join(f"\n> ⚠️ {f}" for f in snap.get("flags", []) if "TRADING_ACTIVATED" not in f)
 
-    md = f"""> ⚠️ **{FALLBACK_MARKER} (không dùng AI):** {reason} Báo cáo dưới đây được tính hoàn toàn từ dữ liệu giao dịch thật theo quy tắc định lượng; phần nội lực doanh nghiệp chưa được đánh giá.
+    # Forecast audit table
+    fa = ctx.get("forecast_audit")
+    if fa and isinstance(fa, dict) and fa.get("has_history") and fa.get("last_audit"):
+        la = fa["last_audit"]
+        audit_table = (
+            f"| Ngày {la.get('forecast_date')} tại giá {_vn(la.get('as_of_price', 0))} | "
+            f"{la.get('predicted_direction')} (Target {_vn(la.get('predicted_target', 0))}) | "
+            f"Giá {_vn(la.get('actual_price', close))} ({la.get('price_change_pct', 0):+.1f}%) | "
+            f"[{la.get('verdict', 'N/A')}] ({la.get('overall_accuracy_pct', 0)}%) `[Tính toán]` | "
+            f"{la.get('lessons_learned', '')} `[Suy luận]` |"
+        )
+    else:
+        audit_table = (
+            f"| Lần đầu phân tích ({q['last_date']}) | Khởi tạo hồ sơ cơ sở | Điểm tham chiếu {_vn(close)} | "
+            f"Khởi tạo baseline `[Tính toán]` | Thiết lập mốc theo dõi chu kỳ T+2,5 cho các phiên tới `[Giả định]` |"
+        )
+
+    # Causal hypotheses table
+    hypos = q.get("causal_hypotheses") or []
+    if hypos:
+        hypo_rows = "\n".join(
+            f"| {h.get('id', f'H{i+1}')}: {h.get('name', 'N/A')} | {h.get('driver', '')} | `[Tính toán]` | {int(round(h.get('prob', 0) * 100))}% | {h.get('verifiable_by', '')} |"
+            for i, h in enumerate(hypos)
+        )
+    else:
+        hypo_rows = (
+            "| H1: Gom hàng & Hấp thụ | Tạo lập gom ngầm vùng hỗ trợ | `[Tính toán]` | 40% | Vol cạn kiệt, giữ nền |\n"
+            "| H2: Phân phối & Neo giá xả ngầm | Neo giá xanh nhẹ dụ cầu | `[Suy luận]` | 15% | Vol lớn nến cụt đầu |\n"
+            "| H3: Quỹ tái cơ cấu (ETF/NAV) | Tác động review quỹ ngoại/nội | `[Giả định]` | 10% | Khớp lệnh ATC đột biến |\n"
+            "| H4: Luân chuyển Ngành tự nhiên | Dòng tiền xoay vòng ngành | `[Nguồn]` | 15% | Cả ngành đồng loạt bứt phá |\n"
+            "| H5: Tái định giá Căn bản (Re-rating) | KQKD quý tăng trưởng đột biến | `[Suy luận]` | 15% | Lợi nhuận ròng tăng > 20% |\n"
+            "| H6: Bán tháo Kỹ thuật / Call Margin | Lực bán giải chấp chéo | `[Chưa xác định]` | 5% | Lệnh bán MP sàn áp đảo |"
+        )
+
+    # Stat ranges T+ table
+    stat_rows = []
+    days_labels = {1: "T+1 (1 phiên)", 2: "T+2.5 (Hàng về chiều T+2)", 5: "T+5 (1 tuần)", 10: "T+10 (2 tuần)"}
+    for s in q.get("stat_ranges", []):
+        d = s["days"]
+        lbl = days_labels.get(d, f"T+{d}")
+        stat_rows.append(f"| {lbl} | {_vn(s['low_95'])} – {_vn(s['high_95'])} `[Tính toán]` | {_vn(s['high_68'])} | Khớp lệnh theo dõi | Quản trị theo Price-Stop |")
+    stat_table_txt = "\n".join(stat_rows) if stat_rows else "| T+2.5 (Hàng về chiều T+2) | N/A – N/A | N/A | Khớp lệnh theo dõi | Quản trị theo Price-Stop |"
+
+    md = f"""> ⚠️ **{FALLBACK_MARKER} (không dùng AI):** {reason} Báo cáo dưới đây được tính hoàn toàn từ dữ liệu giao dịch thật theo quy tắc định lượng Version 5.0; phần nội lực doanh nghiệp chưa được đánh giá bằng LLM.
 {flags}
-## 📌 {sym} — {snap.get('company_name') or sym} | {snap.get('exchange') or ''} | {ctx['sector']}
-*Dữ liệu đến: {q['last_date']} · Đơn vị giá: {q['price_unit']} · Hồ sơ: {prof['horizon']}, rủi ro {prof['risk_profile']}*
+## 📌 {sym} — {snap.get('company_name') or sym} | {snap.get('exchange') or ''} | {ctx['sector']} | {arch_name}
+*Bản trình Hội đồng Đầu tư Định chế × Tác chiến T+2,5 (Version 5.0) · Dữ liệu đến: {q['last_date']} · Đơn vị giá: {q['price_unit']} · Hồ sơ: {prof['horizon']}, rủi ro {prof['risk_profile']}*
 
-### 🎯 Kết luận định lượng
-- **Hành động:** {action} — **Trạng thái:** {stance} — **Độ tin cậy:** {"Thấp" if not dq['has_fundamentals'] else "Trung bình"} (chưa có đánh giá cơ bản)
-- **Người chưa có cổ phiếu:** {bp['setup_type']}. Vùng mua {_vn(bp['entry_low'])}–{_vn(bp['entry_high'])}; {bp['entry_trigger']}.
-- **Người đang nắm giữ:** giữ khi giá còn trên {_vn(bp['stop_loss'])}; thủng mức này → hạ tỷ trọng theo kỷ luật.
-{holder_txt}- **Mức giá quyết định:** vượt {_vn(bp['target_1'])} kèm thanh khoản → cải thiện; thủng {_vn(bp['stop_loss'])} → luận điểm mua mất hiệu lực.
+### 🎯 KẾT LUẬN & QUYẾT NGHỊ CỦA HỘI ĐỒNG (BLUF)
+- **Quyết định:** {action} `[Suy luận]` — **Độ tin cậy:** {"Thấp" if not dq['has_fundamentals'] else "Trung bình"} (chưa có đánh giá cơ bản) — **Định danh bàn cờ Tạo lập:** {arch_name} `[Nguồn]`
+- **Luận điểm cốt lõi:** {t['label']}; {fl['flow_verdict'].lower()}; R:R kế hoạch 1:{_vn(rr)} `[Tính toán]`
+- **Chỉ thị người CHƯA có vị thế:** {bp['setup_type']}. Vùng mua {_vn(bp['entry_low'])}–{_vn(bp['entry_high'])}; {bp['entry_trigger']} `[Tính toán]`
+- **Chỉ thị người ĐANG nắm giữ:** giữ khi giá còn trên {price_stop_val}; thủng mức này → hạ tỷ trọng dứt khoát `[Tính toán]`
+{holder_txt}- **Mức giá bản lề (Pivot Level):** vượt {_vn(bp['target_1'])} kèm thanh khoản → cải thiện; thủng {price_stop_val} → luận điểm mua mất hiệu lực `[Tính toán]`
 
-### 1. Thời tiết thị trường → tỷ trọng cổ phiếu
-- VN-Index: {(mk['trend']['label'] + f"; {mk['distribution_days_25']} ngày phân phối trong 25 phiên; 1 tháng {_vn(mk['ret_20d'], sign=True)}%") if mk else 'chưa có dữ liệu'}.
+### 1. Đối chiếu & Rút kinh nghiệm từ Dự báo Cũ (Forecast Audit)
+| Kỳ dự báo trước | Nhận định cũ | Thực tế diễn biến | Chấm điểm (Hướng / Biên độ / Thời điểm / Điều kiện) | Bài học kinh nghiệm & Tự sửa sai |
+| :--- | :--- | :--- | :--- | :--- |
+{audit_table}
+
+### 2. Định danh Bản chất Cổ phiếu & Thời tiết Thị trường (Tránh bẫy "Xanh vỏ đỏ lòng")
+- **Định danh Tạo lập:** {arch_name} — {arch_rule} `[Nguồn]`
+- **Thời tiết thị trường:** VN-Index {(mk['trend']['label'] + f"; {mk['distribution_days_25']} ngày phân phối trong 25 phiên; 1 tháng {_vn(mk['ret_20d'], sign=True)}%") if mk else 'chưa có dữ liệu'}.
 - **Trạng thái:** {mk['status'] if mk else 'N/A'} → tỷ trọng cổ phiếu tổng thể tham khảo **{mk['equity_allocation'] if mk else 'N/A'}**. {mk.get('breadth_hint', '') if mk else ''}
 - Beta của {sym} so với VN-Index (120 phiên): {_vn(rs.get('beta_120d'))} → {'biến động mạnh hơn thị trường' if (rs.get('beta_120d') or 0) > 1.1 else 'biến động ít hơn hoặc tương đương thị trường'}.
+- **Đối chiếu 3 Giả thuyết Thay thế Không-Thao-túng:**
+  1. *Quỹ tái cơ cấu (Fund Rebalance):* Rà soát danh mục ETF ngoại/nội định kỳ `[Giả định]`.
+  2. *Luân chuyển dòng tiền ngành (Sector Rotation):* {(f"Xếp hạng ngành {rk['rank']}/{rk['of']}" if rk else "Theo dõi dòng tiền nhóm ngành")} `[Nguồn]`.
+  3. *Tái định giá theo nội tại (Fundamental Re-rating):* Cần AI đọc BCTC để xác nhận `[Chưa xác định]`.
 
-### 2. Vị thế ngành & sức mạnh tương đối
+### 3. Đọc Bảng điện, Sổ lệnh & Dòng tiền ẩn (Tape Reading & Đọc vị Tạo lập)
+- **Độ sâu thị trường & Tường đỡ:** {t6.get('order_book_analysis') or 'Đang theo dõi lệnh kê 3 bước giá.'} `[Nguồn]`
+- **Bất đối xứng Khối ngoại:** {t6.get('foreign_cycle_analysis') or foreign} `[Nguồn]`
+- **Phân biệt Spring vs. Gãy thật:** {t6.get('spring_analysis') or 'Chưa ghi nhận cú rũ bỏ Spring rõ rệt.'} `[Suy luận]`
+- **Phân tích phiên ATC & CLV:** Chỉ số Close Location Value CLV = {clv_val} → Đánh giá ATC: **{atc_eval}**{exp_warn}. `[Tính toán]`
+
+### 4. Ma trận 6 Giả thuyết Biến động Giá (Causal Hypotheses Matrix)
+| Giả thuyết nguyên nhân | Diễn giải & Bằng chứng thực tế | Nhãn kiểm chứng | Xác suất (%) | Điều kiện xác nhận / Bác bỏ |
+| :--- | :--- | :--- | :--- | :--- |
+{hypo_rows}
+
+### 5. Nội lực Doanh nghiệp, Bóc tách BCTC (Forensic) & Khoảng cách Kỳ vọng (Priced-in)
+- Chưa đánh giá trong chế độ dự phòng (cần AI đọc BCTC/tra cứu web). Không dùng nhận định này cho quyết định trung – dài hạn `[Chưa xác định]`.
 - {('Xếp hạng hiệu suất 3 tháng: **' + str(rk['rank']) + '/' + str(rk['of']) + '** trong nhóm ' + ctx['sector'] + ' → ' + rk['verdict'] + f"; trung vị 1 tháng của ngành {_vn(rk['peer_median_ret20'], sign=True)}% so với {sym} {_vn(q['returns']['1m'], sign=True)}%.") if rk else 'Chưa xếp hạng được trong ngành.'}
-- So với VN-Index: {rs.get('verdict', 'N/A')} — vượt trội 1 tháng {_vn(ex20, sign=True)}%, 3 tháng {_vn(ex60, sign=True)}%, 1 năm {_vn(rs.get('excess_250d'), sign=True)}%.
 
-### 3. Nội lực doanh nghiệp & định giá
-- Chưa đánh giá trong chế độ dự phòng (cần AI đọc BCTC/tra cứu web). Không dùng nhận định này cho quyết định trung – dài hạn.
-
-### 4. Dòng tiền & hành vi giá
-- **{fl['flow_verdict']}**: tỷ lệ KL phiên tăng/giảm 20 phiên {_vn(fl['up_down_volume_ratio_20d'])}, {fl['accumulation_days_25']} ngày tích lũy vs {fl['distribution_days_25']} ngày phân phối.
-- Thanh khoản TB 20 phiên **{_vn(fl['avg_value_20d_bn'], 1)} tỷ/phiên** ({fl['liquidity_tier']}), xu hướng {_vn(fl['liquidity_trend_20d_pct'], sign=True)}%. Phiên đột biến: {spikes}.
-- {foreign}
-
-### 5. Cấu trúc kỹ thuật & vùng giá then chốt
+### 6. Cấu trúc Kỹ thuật, Volume Profile (POC) & Các Vùng giá Then chốt
 - **{t['label']}.** {t.get('ma_alignment', '')}. Giá cách MA50 {_vn(t['vs_ma50_pct'], sign=True)}%, MA200 {_vn(t['vs_ma200_pct'], sign=True)}%.
 - RSI {_vn(m['rsi'])}, MACD {m['macd_vs_signal']} Signal và {m['macd_vs_zero']} 0. {m.get('divergence') or 'Không có phân kỳ RSI rõ ràng.'}
 - Cách đỉnh 52 tuần {_vn(vr['from_52w_high_pct'], sign=True)}%, ATR {_vn(vr['atr_pct'])}%/phiên. {vr.get('base_pattern') or ''}
@@ -716,34 +831,58 @@ def _rule_based_report(ctx: dict, reason: str) -> dict:
 | Vùng | Giá | Cơ sở | Độ mạnh |
 | :--- | :--- | :--- | :--- |
 {res_rows}
-| Giá hiện tại | {_vn(close)} | | |
+| Giá hiện tại | {_vn(close)} | Điểm tham chiếu thị trường | |
 {sup_rows}
 
-### 6. Xác suất nền & dải giá thống kê
+### 7. Đồng hồ Sinh học T+2,5 & Bộ lọc Sự kiện Quyền (GDKHQ / Điểm rơi BCTC)
+- **Chu kỳ T+2,5 hàng về:** Canh mốc `13h00 chiều T+2,5` của các phiên nổ thanh khoản kỷ lục.
+- **3 Khung giờ tác chiến chuẩn:**
+  - `09h00 – 10h00`: Khung giờ Bẫy hưng phấn / Mở Gap sáng (Đứng ngoài quan sát, cấm mua đuổi giá xanh).
+  - `11h00 – 11h30`: Khung giờ Biến động trưa / Kiểm định lực cầu phiên sáng.
+  - `13h45 – 14h30 / ATC`: Khung giờ Phán quyết & Chốt chặn ATC (Thời điểm ra quyết định bấm nút Mua/Bán).
+- **Bộ lọc sự kiện quyền:** Kiểm tra kỹ hiệu sự kiện quyền (•), áp dụng triệt để quy tắc **"Né trước chốt – Bắt sau chia"**.
+
+### 8. Xác suất Nền (Base-rate), Dải Thống kê 95% & Bảng Mốc Thời gian T+
 {br_txt or '- Không đủ mẫu lịch sử.'}
 
-### 7. Kịch bản
-| Kịch bản | Xác suất | Giá mục tiêu | Dấu hiệu xác nhận | Hành động |
+| Mốc thời gian | Dải giá thống kê 95% | Giá mục tiêu kỳ vọng | Dấu hiệu xác nhận trên bảng điện | Hành động kiểm soát rủi ro |
 | :--- | :--- | :--- | :--- | :--- |
-""" + "\n".join(f"| {s['name']} | {s['probability']}% | {_vn(s['price_target'])} | {s['trigger']} | {s['action']} |" for s in scenarios) + f"""
+{stat_table_txt}
 
-### 8. Kế hoạch hành động
-| Hạng mục | Giá trị |
-| :--- | :--- |
-| Thiết lập | {bp['setup_type']} |
-| Vùng mua | {_vn(bp['entry_low'])} – {_vn(bp['entry_high'])} |
-| Điều kiện kích hoạt | {bp['entry_trigger']} |
-| Cắt lỗ bắt buộc | {_vn(bp['stop_loss'])} (−{_vn(bp['stop_pct'])}%) |
-| Mục tiêu 1 / Mục tiêu 2 | {_vn(bp['target_1'])} / {_vn(bp['target_2'])} |
-| Tỷ lệ R:R | 1 : {_vn(bp['rr_ratio'])} — {bp['rr_quality']} |
-| Tỷ trọng tối đa | {_vn(bp['max_position_pct'], 1)}% NAV — {bp['sizing_rule']} |
-| Giải ngân | 50% tại vùng mua khi có tín hiệu kích hoạt, 50% khi giá vượt mục tiêu 1 kèm thanh khoản |
-| Dừng theo thời gian | {bp['time_stop']} |
+### 9. Kế hoạch Tác chiến & Bộ Quy Tắc Thực Chiến T+2,5 (Exit Stops Triad)
+| Hạng mục | Thông số khuyến nghị | Cơ sở thực chiến & Kỷ luật đi vốn |
+| :--- | :--- | :--- |
+| Thiết lập giao dịch | {bp['setup_type']} | `[Suy luận]` Phù hợp chu kỳ sóng và dòng tiền |
+| Vùng mua gom | {_vn(bp['entry_low'])} – {_vn(bp['entry_high'])} | `[Tính toán]` Vùng nền tích lũy cạn cung |
+| Khung giờ & Điều kiện kích hoạt | `13h45 – 14h30 / ATC` | {bp['entry_trigger']} |
+| **Price-Stop (Chốt chặn Giá)** | {price_stop_val} (−{price_stop_pct}%) | `[Tính toán]` Đệm an toàn ≥ 1,5× ATR và ≤ 12% |
+| **Thesis-Stop (Chốt chặn Luận điểm)** | {thesis_stop_cond} | Thoát ngay khi luận điểm sai, không chờ giá `[Suy luận]` |
+| **Time-Stop (Chốt chặn Thời gian)** | {time_stop_act} | Giới hạn chi phí cơ hội, chủ động thu hồi vốn `[Giả định]` |
+| Chốt lời Nhịp 1 (Bán 30%) | {_vn(bp['target_1'])} | Khóa lãi cơ bản tại Kháng cự 1 |
+| Chốt lời Nhịp 2 (Giữ 50% Trailing) | Trailing Stop trượt 1,5%–2% từ đỉnh | Cưỡi sóng bằng lệnh điều kiện tự động |
+| Chốt lời Nhịp 3 (Giữ 20% Gap FOMO) | Bán lúc 09h15–09h30 sáng hôm sau | Ăn trọn quán tính FOMO mở Gap |
+| Tỷ lệ Lợi nhuận / Rủi ro (R:R) | 1 : {_vn(bp['rr_ratio'])} — {bp['rr_quality']} | Chuẩn CFA $\ge 1:2$ `[Tính toán]` |
+| Tỷ trọng tối đa & Đi vốn | {_vn(bp['max_position_pct'], 1)}% NAV — {bp['sizing_rule']} | Giải ngân 2 bước tại nền `[Tính toán]` |
+
+### 10. Luận điểm Ủng hộ vs. Phản biện & Pre-Mortem (Mổ xẻ kịch bản thua lỗ)
+- **Luận điểm ủng hộ:** {fl['flow_verdict']}; RSI {_vn(m['rsi'])}; R:R 1:{_vn(rr)}.
+- **Rủi ro & Pre-Mortem:** Nếu VN-Index gãy hỗ trợ hoặc lực bán ATC áp đảo dẫn tới thủng {price_stop_val}, kịch bản tiêu cực xảy ra và phải cắt lỗ dứt khoát.
+
+### 11. Bảng Checklist 5 Phút Trước Khi Bấm Lệnh (Dành cho người bận rộn ngoài công trường)
+""" + "\n".join(
+        f"- **[{it['status']}] {it['step']}:** {it['detail']}"
+        for it in (t6.get("checklist_5m") or [])
+    ) + f"""
+
+### 12. Bộ 3 Câu Hỏi Tự Kiểm Tra (Self-Reflection) Trước Khi Phê Duyệt
+1. `[ ]` **Kiểm tra Thiên kiến & Giả định ngầm:** Báo cáo dự phòng này dựa hoàn toàn trên dữ liệu kỹ thuật và dòng tiền, chưa có thẩm định BCTC chuyên sâu.
+2. `[ ]` **Kiểm tra Kế hoạch Thoát hiểm & Thesis-Stop:** Mức cắt lỗ kỹ thuật {price_stop_val} và điều kiện Thesis-Stop đã được thiết lập tự động.
+3. `[ ]` **Kiểm tra Kỷ luật Khung giờ Tác chiến & Bẫy T+2,5:** Tuyệt đối không bấm lệnh mua đuổi trước 10h00 sáng; chỉ kích hoạt sau 13h45.
 
 ### 🔍 Dữ liệu còn thiếu
 """ + "\n".join(f"- {g}" for g in dq["gaps"]) + """
 
-> *Phân tích định lượng tự động, mang tính tham khảo, không phải khuyến nghị mua/bán.*"""
+> *Báo cáo phân tích định lượng Version 5.0 tự động, mang tính tham khảo, không phải khuyến nghị mua/bán.*"""
 
     rep = {
         "analysis": md,
@@ -776,7 +915,7 @@ def _rule_based_report(ctx: dict, reason: str) -> dict:
             "variant_view": "Không có — báo cáo dự phòng chỉ dựa trên dữ liệu giá.",
         },
         "trade_plan": {k: bp[k] for k in ("setup_type", "entry_low", "entry_high", "entry_trigger", "stop_loss", "stop_basis", "target_1", "target_2", "rr_ratio", "max_position_pct")}
-        | {"scaling_plan": "50% tại vùng mua khi có tín hiệu kích hoạt, 50% khi vượt mục tiêu 1", "time_stop": bp["time_stop"], "invalidation": f"Đóng cửa dưới {_vn(bp['stop_loss'])}"},
+        | {"scaling_plan": "50% tại vùng mua khi có tín hiệu kích hoạt, 50% khi vượt mục tiêu 1", "time_stop": bp["time_stop"], "invalidation": f"Đóng cửa dưới {_vn(bp['stop_loss'])}", "exit_stops": ex_stops},
         "scenarios": scenarios,
         "catalysts": [],
         "risks": [x for x in [
@@ -797,6 +936,7 @@ def _rule_based_report(ctx: dict, reason: str) -> dict:
         "scores": scores,
         "summary": {"stance": stance, "confidence": "Thấp" if not dq["has_fundamentals"] else "Trung bình", "action": action},
         "overall_score": 0,
+        "forecast_audit": fa,
     }
     return _postprocess(rep, ctx, "rule_based")
 

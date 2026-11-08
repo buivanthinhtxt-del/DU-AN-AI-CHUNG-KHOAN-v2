@@ -1,0 +1,2100 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Invest Workstation Pro — FiinTrade x FireAnt Edition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-root: #0A0D14;
+      --bg-panel: #101520;
+      --bg-card: #151C2C;
+      --bg-subtle: #1C263A;
+      --border-color: #202B3E;
+      --border-light: #2A3A54;
+
+      --text-primary: #F1F5F9;
+      --text-secondary: #94A3B8;
+      --text-muted: #64748B;
+
+      --bull-green: #00C076;
+      --bull-green-bg: rgba(0, 192, 118, 0.12);
+      --bear-red: #FF3B30;
+      --bear-red-bg: rgba(255, 59, 48, 0.12);
+      --ref-yellow: #FFB800;
+      --ref-yellow-bg: rgba(255, 184, 0, 0.12);
+      --accent-blue: #2F81F7;
+      --accent-blue-bg: rgba(47, 129, 247, 0.12);
+      --accent-purple: #A371F7;
+
+      --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-root);
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      font-size: 13px;
+      line-height: 1.45;
+      overflow-x: hidden;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-root); }
+    ::-webkit-scrollbar-thumb { background: #25334A; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #354766; }
+
+    /* TOP NAVBAR */
+    .top-navbar {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-color);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(8px);
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-badge {
+      background: linear-gradient(135deg, #2F81F7, #A371F7);
+      color: white;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .brand-title {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .brand-title span {
+      color: var(--accent-blue);
+    }
+
+    .tag-hybrid {
+      font-size: 10px;
+      background: rgba(163, 113, 247, 0.15);
+      color: var(--accent-purple);
+      border: 1px solid rgba(163, 113, 247, 0.3);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
+    /* CONTROLS */
+    .toolbar-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .control-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      padding: 4px 10px;
+      border-radius: 5px;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .control-item input, .control-item select {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      font-size: 12px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .symbol-input {
+      font-family: var(--font-mono) !important;
+      font-weight: 700;
+      color: var(--ref-yellow) !important;
+      text-transform: uppercase;
+      width: 55px;
+    }
+
+    .btn-analyze {
+      background: linear-gradient(135deg, #2F81F7, #1E60C6);
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 5px;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-analyze:hover {
+      box-shadow: 0 0 12px rgba(47, 129, 247, 0.4);
+      transform: translateY(-1px);
+    }
+
+    /* MACRO TICKER BAR */
+    .macro-bar {
+      background: #0C1019;
+      border-bottom: 1px solid var(--border-color);
+      padding: 6px 16px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .macro-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .macro-label { color: var(--text-muted); font-weight: 600; }
+    .macro-val { font-weight: 700; }
+
+    .c-green { color: var(--bull-green); }
+    .c-red { color: var(--bear-red); }
+    .c-yellow { color: var(--ref-yellow); }
+    .c-blue { color: var(--accent-blue); }
+
+    /* WORKSTATION GRID LAYOUT (2-COLUMN: LEFT STACK + MAIN WORKSPACE) */
+    .workstation-container {
+      display: grid;
+      grid-template-columns: 295px minmax(0, 1fr);
+      gap: 12px;
+      padding: 12px 16px;
+      min-height: calc(100vh - 82px);
+      align-items: start;
+    }
+
+    .left-column-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    /* LEFT SIDEBAR */
+    .sidebar-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 10px 14px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--text-primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .watchlist-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .watchlist-table th {
+      color: var(--text-muted);
+      text-align: left;
+      padding: 8px 10px;
+      font-size: 11px;
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 600;
+    }
+    .watchlist-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(34, 46, 66, 0.4);
+      cursor: pointer;
+      font-family: var(--font-mono);
+      transition: background 0.15s;
+    }
+    .watchlist-table tr:hover td {
+      background: var(--bg-subtle);
+    }
+    .watchlist-table tr.active td {
+      background: rgba(47, 129, 247, 0.12);
+      border-left: 2px solid var(--accent-blue);
+    }
+
+    .badge-score {
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .score-high { background: var(--bull-green-bg); color: var(--bull-green); }
+    .score-med { background: var(--ref-yellow-bg); color: var(--ref-yellow); }
+    .score-low { background: var(--bear-red-bg); color: var(--bear-red); }
+
+    /* SECTOR LIQUIDITY MINI */
+    .sector-mini-box {
+      padding: 12px;
+      border-top: 1px solid var(--border-color);
+      margin-top: auto;
+      background: #0C1019;
+    }
+    .sector-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 700;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .sector-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .sector-chip {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+
+    /* CENTER WORKSPACE */
+    .main-workspace {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* ENHANCED STOCK BANNER (FIINTRADE + FIREANT FUSION) */
+    .stock-banner {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .stock-banner-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .stock-main-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .symbol-pill {
+      font-size: 24px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      color: var(--bull-green);
+      letter-spacing: 0.5px;
+    }
+
+    .stock-meta {
+      display: flex;
+      flex-direction: column;
+    }
+    .stock-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .stock-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .stock-price-strip {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      font-family: var(--font-mono);
+    }
+    .stock-current-price {
+      font-size: 26px;
+      font-weight: 800;
+    }
+    .stock-delta {
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .stock-stats-inline {
+      display: flex;
+      gap: 16px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      border-left: 1px solid var(--border-color);
+      padding-left: 16px;
+    }
+    .stat-col {
+      display: flex;
+      flex-direction: column;
+    }
+    .stat-lbl { color: var(--text-muted); font-size: 10px; text-transform: uppercase; }
+    .stat-val { font-family: var(--font-mono); font-weight: 700; color: var(--text-primary); }
+
+    /* FIREANT SIGNATURE FEATURE 1: 52-WEEK RANGE & ACTIVE BUY/SELL BAR */
+    .stock-banner-bottom {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(32, 43, 62, 0.6);
+      font-size: 11px;
+    }
+
+    .range-box {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .range-labels {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .range-bar-track {
+      height: 6px;
+      background: var(--bg-subtle);
+      border-radius: 3px;
+      position: relative;
+      overflow: hidden;
+    }
+    .range-bar-progress {
+      position: absolute;
+      left: 15%;
+      width: 70%;
+      height: 100%;
+      background: linear-gradient(90deg, #2F81F7, #00C076);
+      border-radius: 3px;
+    }
+    .range-pin {
+      position: absolute;
+      left: 78%;
+      top: -2px;
+      width: 10px;
+      height: 10px;
+      background: #FFF;
+      border: 2px solid var(--bull-green);
+      border-radius: 50%;
+      transform: translateX(-50%);
+    }
+
+    .active-order-box {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .active-order-labels {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+    .active-order-bar {
+      height: 6px;
+      border-radius: 3px;
+      display: flex;
+      overflow: hidden;
+    }
+    .buy-fill {
+      background: var(--bull-green);
+      height: 100%;
+    }
+    .sell-fill {
+      background: var(--bear-red);
+      height: 100%;
+    }
+
+    /* WORKSTATION TABS */
+    .tab-nav-bar {
+      display: flex;
+      gap: 2px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 8px 8px 0 0;
+      padding: 4px 6px 0 6px;
+      border-bottom: 2px solid var(--border-color);
+    }
+
+    .tab-btn {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 6px 6px 0 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      position: relative;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-card);
+    }
+
+    .tab-btn.active {
+      color: var(--accent-blue);
+      background: var(--bg-card);
+      font-weight: 700;
+      border: 1px solid var(--border-color);
+      border-bottom: 2px solid var(--bg-card);
+      margin-bottom: -2px;
+    }
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--accent-blue);
+      border-radius: 2px 2px 0 0;
+    }
+
+    /* TAB CONTENT PANELS */
+    .tab-content-area {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      padding: 16px;
+      min-height: 520px;
+    }
+
+    .tab-pane {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .tab-pane.active {
+      display: flex;
+    }
+
+    /* BLUF ALERT BANNER */
+    .bluf-banner {
+      background: linear-gradient(135deg, rgba(0, 192, 118, 0.08), rgba(47, 129, 247, 0.08));
+      border: 1px solid rgba(0, 192, 118, 0.3);
+      border-radius: 6px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+    }
+    .bluf-badge {
+      background: var(--bull-green);
+      color: #000;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .bluf-text {
+      flex: 1;
+    }
+    .bluf-title {
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .bluf-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* 2-CARD ACTION INSTRUCTIONS */
+    .action-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .action-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 12px;
+    }
+    .action-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 12px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .action-card.buyer .action-card-header { color: var(--bull-green); }
+    .action-card.holder .action-card-header { color: var(--accent-blue); }
+    .action-card p {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* DATA TABLES */
+    .data-table-wrapper {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .table-caption {
+      padding: 8px 12px;
+      background: var(--bg-subtle);
+      font-weight: 700;
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .fiin-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .fiin-table th {
+      background: rgba(17, 22, 34, 0.8);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 11px;
+      padding: 8px 12px;
+      text-align: right;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .fiin-table th:first-child { text-align: left; }
+    .fiin-table td {
+      padding: 9px 12px;
+      text-align: right;
+      border-bottom: 1px solid rgba(34, 46, 66, 0.4);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    .fiin-table td:first-child {
+      text-align: left;
+      font-family: var(--font-ui);
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .fiin-table tr:hover td {
+      background: var(--bg-subtle);
+    }
+
+    /* FIREANT SIGNATURE FEATURE 2: SHARK / BIG ORDER TRACKER */
+    .shark-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+    .shark-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .shark-tier {
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .shark-val {
+      font-size: 15px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+    }
+    .shark-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* RIGHT COLUMN */
+    .right-column {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .rating-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .overall-score-display {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 10px 14px;
+    }
+    .score-circle {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 192, 118, 0.2), transparent);
+      border: 2px solid var(--bull-green);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-weight: 800;
+      color: var(--bull-green);
+      font-size: 16px;
+    }
+    .score-circle span { font-size: 9px; font-weight: 500; color: var(--text-muted); }
+
+    /* 5-DIMENSIONS */
+    .dimension-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .dimension-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .dimension-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+    .dimension-name { color: var(--text-secondary); font-weight: 600; }
+    .dimension-val { font-family: var(--font-mono); font-weight: 700; color: var(--text-primary); }
+
+    .progress-bar-bg {
+      height: 5px;
+      background: var(--bg-subtle);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.6s ease;
+    }
+
+    /* FIREANT SIGNATURE FEATURE 3: ADVANCED AUDIT BADGES (F-SCORE & Z-SCORE) */
+    .audit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .audit-badge-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .audit-lbl { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+    .audit-val { font-size: 13px; font-weight: 800; font-family: var(--font-mono); }
+    .audit-desc { font-size: 10px; color: var(--bull-green); font-weight: 600; }
+
+    /* TRADE PLAYBOOK MINI */
+    .playbook-mini {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .playbook-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      padding: 4px 0;
+      border-bottom: 1px dashed rgba(34, 46, 66, 0.6);
+    }
+    .playbook-row:last-child { border-bottom: none; }
+    .playbook-lbl { color: var(--text-muted); }
+    .playbook-val { font-family: var(--font-mono); font-weight: 700; }
+
+    /* PRE-MORTEM RISK ALERT */
+    .premortem-box {
+      background: rgba(255, 59, 48, 0.08);
+      border: 1px solid rgba(255, 59, 48, 0.25);
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: flex;
+      gap: 10px;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .premortem-icon { color: var(--bear-red); font-size: 16px; font-weight: 800; }
+    .premortem-body { color: var(--text-secondary); }
+    .premortem-body strong { color: var(--bear-red); }
+
+    /* TAGS */
+    .tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+
+    /* ==========================================================================
+       2-TIER VERIFICATION FUNNEL & SELECTIVE BADGES
+       ========================================================================== */
+    .badge-tag {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 3px;
+      margin: 0 3px;
+      vertical-align: middle;
+      line-height: 1.4;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .badge-source {
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.15);
+      border-color: rgba(56, 189, 248, 0.35);
+    }
+    .badge-calc {
+      color: #00C076;
+      background: rgba(0, 192, 118, 0.15);
+      border-color: rgba(0, 192, 118, 0.35);
+    }
+    .badge-deduce {
+      color: #a855f7;
+      background: rgba(168, 85, 247, 0.15);
+      border-color: rgba(168, 85, 247, 0.35);
+    }
+    .badge-assume {
+      color: #eab308;
+      background: rgba(234, 179, 8, 0.15);
+      border-color: rgba(234, 179, 8, 0.35);
+    }
+    .badge-unknown {
+      color: #94a3b8;
+      background: rgba(148, 163, 184, 0.15);
+      border-color: rgba(148, 163, 184, 0.35);
+    }
+    .badge-conflict {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.35);
+    }
+
+    /* FORECAST AUDIT PANEL */
+    .forecast-audit-panel {
+      border: 1px solid rgba(47, 129, 247, 0.35);
+      background: linear-gradient(135deg, rgba(21, 28, 44, 0.95), rgba(16, 21, 32, 0.95));
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    }
+    .audit-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .audit-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--text-primary);
+      letter-spacing: 0.5px;
+    }
+    .audit-badge-correct {
+      background: rgba(0, 192, 118, 0.18);
+      color: var(--bull-green);
+      border: 1px solid rgba(0, 192, 118, 0.45);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .audit-meta {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+    }
+    .audit-grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    @media (max-width: 768px) {
+      .audit-grid-4 { grid-template-columns: repeat(2, 1fr); }
+    }
+    .audit-cell {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .audit-cell-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .audit-cell-val {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      margin-top: 3px;
+    }
+    .audit-lessons {
+      background: rgba(47, 129, 247, 0.08);
+      border-left: 3px solid var(--accent-blue);
+      padding: 8px 12px;
+      border-radius: 0 6px 6px 0;
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--text-primary);
+    }
+
+    /* THREE-STOP EXIT DEFENSE SYSTEM */
+    .stops-container {
+      margin-bottom: 14px;
+    }
+    .stops-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 6px;
+    }
+    @media (max-width: 768px) {
+      .stops-grid { grid-template-columns: 1fr; }
+    }
+    .stop-card {
+      border-radius: 6px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.02);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .stop-card.price-stop {
+      border-left: 3px solid var(--bear-red);
+      background: linear-gradient(135deg, rgba(255, 59, 48, 0.05), transparent);
+    }
+    .stop-card.thesis-stop {
+      border-left: 3px solid #a855f7;
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.05), transparent);
+    }
+    .stop-card.time-stop {
+      border-left: 3px solid var(--ref-yellow);
+      background: linear-gradient(135deg, rgba(255, 184, 0, 0.05), transparent);
+    }
+    .stop-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .stop-badge {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 800;
+      padding: 2px 5px;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+    .stop-badge-price {
+      background: rgba(255, 59, 48, 0.18);
+      color: var(--bear-red);
+      border: 1px solid rgba(255, 59, 48, 0.4);
+    }
+    .stop-badge-thesis {
+      background: rgba(168, 85, 247, 0.18);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.4);
+    }
+    .stop-badge-time {
+      background: rgba(255, 184, 0, 0.18);
+      color: var(--ref-yellow);
+      border: 1px solid rgba(255, 184, 0, 0.4);
+    }
+    .stop-title {
+      font-weight: 700;
+      font-size: 11.5px;
+      color: var(--text-primary);
+    }
+    .stop-val {
+      font-size: 15px;
+      font-weight: 800;
+      margin: 2px 0;
+      font-family: var(--font-mono);
+    }
+    .stop-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+    .stop-action {
+      font-size: 11px;
+      color: var(--text-primary);
+      line-height: 1.4;
+      margin-top: 3px;
+      padding-top: 4px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* CAUSAL HYPOTHESES MATRIX */
+    .hypo-bar-container {
+      width: 100%;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 3px;
+    }
+    .hypo-bar {
+      height: 100%;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP WORKSTATION NAVBAR -->
+  <header class="top-navbar">
+    <div class="brand-section">
+      <div class="brand-badge">Fiin x FireAnt Pro</div>
+      <div class="brand-title">NGHIỆP VỤ <span>AI WORKSTATION</span></div>
+      <div class="tag-hybrid">HYBRID TERMINAL</div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="toolbar-controls">
+      <div class="control-item">
+        <span style="color: var(--text-muted);">MÃ:</span>
+        <input type="text" id="symbolInput" class="symbol-input" value="HPG" maxlength="4">
+      </div>
+
+      <div class="control-item">
+        <span style="color: var(--text-muted);">KHUNG:</span>
+        <select id="horizonSelect">
+          <option>Swing (1–3 tháng)</option>
+          <option>Lướt sóng (1–4 tuần)</option>
+          <option>Trung hạn (3–12 tháng)</option>
+          <option>Dài hạn (> 1 năm)</option>
+        </select>
+      </div>
+
+      <div class="control-item">
+        <span style="color: var(--text-muted);">KHẨU VỊ:</span>
+        <select id="riskSelect">
+          <option>Trung bình</option>
+          <option>Thận trọng</option>
+          <option>Tăng trưởng cao</option>
+        </select>
+      </div>
+
+      <button class="btn-analyze" onclick="simulateAnalyze()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        CHẠY THẨM ĐỊNH
+      </button>
+    </div>
+  </header>
+
+  <!-- MACRO TICKER BAR -->
+  <div class="macro-bar">
+    <div class="macro-item">
+      <span class="macro-label">VN-INDEX:</span>
+      <span class="macro-val c-green">1.258,42 (+0.78%)</span>
+    </div>
+    <div class="macro-item">
+      <span class="macro-label">VN30:</span>
+      <span class="macro-val c-green">1.314,10 (+1.12%)</span>
+    </div>
+    <div class="macro-item">
+      <span class="macro-label">HNX:</span>
+      <span class="macro-val c-red">231,18 (-0.14%)</span>
+    </div>
+    <div class="macro-item">
+      <span class="macro-label">USD/VND:</span>
+      <span class="macro-val c-yellow">25.415 (-10đ)</span>
+    </div>
+    <div class="macro-item">
+      <span class="macro-label">LÃI SUẤT OMO:</span>
+      <span class="macro-val c-blue">4.00%</span>
+    </div>
+    <div class="macro-item">
+      <span class="macro-label">KHỐI NGOẠI:</span>
+      <span class="macro-val c-green">+142,6 tỷ (Mua)</span>
+    </div>
+    <div class="macro-item">
+      <span class="macro-label">TỰ DOANH:</span>
+      <span class="macro-val c-green">+85.4 tỷ</span>
+    </div>
+    <div class="macro-item">
+      <span class="macro-label">THANH KHOẢN TOÀN SÀN:</span>
+      <span class="macro-val">18.450 tỷ</span>
+    </div>
+  </div>
+
+  <!-- WORKSTATION MAIN CONTAINER -->
+  <main class="workstation-container">
+
+    <!-- LEFT COLUMN: WATCHLIST + 3 TOOL CARDS -->
+    <aside class="left-column-stack">
+      <div class="sidebar-panel">
+        <div class="panel-header">
+          <span>Danh Mục Theo Dõi</span>
+          <span style="font-size: 10px; color: var(--text-muted);">FIIN-RATING</span>
+        </div>
+
+        <table class="watchlist-table">
+          <thead>
+            <tr>
+              <th>MÃ</th>
+              <th style="text-align: right;">GIÁ</th>
+              <th style="text-align: right;">+/- %</th>
+              <th style="text-align: center;">ĐIỂM</th>
+            </tr>
+          </thead>
+          <tbody id="watchlistBody">
+            <tr class="active" onclick="switchStock('HPG', 28.45, 2.34, 78)">
+              <td style="font-weight: 700; color: var(--bull-green);">HPG</td>
+              <td style="text-align: right;">28.45</td>
+              <td style="text-align: right; color: var(--bull-green);">+2.34%</td>
+              <td style="text-align: center;"><span class="badge-score score-high">78</span></td>
+            </tr>
+            <tr onclick="switchStock('FPT', 135.20, 1.15, 84)">
+              <td style="font-weight: 700; color: var(--bull-green);">FPT</td>
+              <td style="text-align: right;">135.20</td>
+              <td style="text-align: right; color: var(--bull-green);">+1.15%</td>
+              <td style="text-align: center;"><span class="badge-score score-high">84</span></td>
+            </tr>
+            <tr onclick="switchStock('SSI', 31.80, -0.62, 62)">
+              <td style="font-weight: 700; color: var(--bear-red);">SSI</td>
+              <td style="text-align: right;">31.80</td>
+              <td style="text-align: right; color: var(--bear-red);">-0.62%</td>
+              <td style="text-align: center;"><span class="badge-score score-med">62</span></td>
+            </tr>
+            <tr onclick="switchStock('VCB', 91.50, 0.00, 71)">
+              <td style="font-weight: 700; color: var(--ref-yellow);">VCB</td>
+              <td style="text-align: right;">91.50</td>
+              <td style="text-align: right; color: var(--ref-yellow);">0.00%</td>
+              <td style="text-align: center;"><span class="badge-score score-high">71</span></td>
+            </tr>
+            <tr onclick="switchStock('MWG', 62.40, 3.12, 75)">
+              <td style="font-weight: 700; color: var(--bull-green);">MWG</td>
+              <td style="text-align: right;">62.40</td>
+              <td style="text-align: right; color: var(--bull-green);">+3.12%</td>
+              <td style="text-align: center;"><span class="badge-score score-high">75</span></td>
+            </tr>
+            <tr onclick="switchStock('NVL', 13.20, -2.45, 34)">
+              <td style="font-weight: 700; color: var(--bear-red);">NVL</td>
+              <td style="text-align: right;">13.20</td>
+              <td style="text-align: right; color: var(--bear-red);">-2.45%</td>
+              <td style="text-align: center;"><span class="badge-score score-low">34</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- SECTOR HEATMAP MINI -->
+        <div class="sector-mini-box">
+          <div class="sector-title">DÒNG TIỀN THEO NGÀNH (REALTIME)</div>
+          <div class="sector-chips">
+            <div class="sector-chip" style="background: var(--bull-green-bg); color: var(--bull-green);">Thép: +3.2%</div>
+            <div class="sector-chip" style="background: var(--bull-green-bg); color: var(--bull-green);">Bán lẻ: +1.8%</div>
+            <div class="sector-chip" style="background: var(--ref-yellow-bg); color: var(--ref-yellow);">Ngân hàng: +0.4%</div>
+            <div class="sector-chip" style="background: var(--bear-red-bg); color: var(--bear-red);">BĐS: -1.2%</div>
+            <div class="sector-chip" style="background: var(--bull-green-bg); color: var(--bull-green);">Công nghệ: +1.4%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TOOL CARD 1: RATING CARD -->
+      <div class="rating-card">
+        <div class="panel-header" style="margin: -14px -14px 10px -14px; border-radius: 8px 8px 0 0;">
+          <span>ĐÁNH GIÁ 5 CHIỀU NGHIỆP VỤ</span>
+          <span class="tag score-high">TÍCH CỰC</span>
+        </div>
+
+        <div class="overall-score-display">
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Điểm Tổng Hợp</div>
+            <div style="font-size: 14px; font-weight: 700; color: var(--bull-green);">Khuyến nghị: MUA</div>
+          </div>
+          <div class="score-circle">
+            78
+            <span>/100</span>
+          </div>
+        </div>
+
+        <!-- 5-DIMENSIONS -->
+        <div class="dimension-list">
+          <div class="dimension-row">
+            <div class="dimension-header">
+              <span class="dimension-name">1. Vĩ mô & Ngành thép</span>
+              <span class="dimension-val">75/100</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width: 75%; background: var(--bull-green);"></div>
+            </div>
+          </div>
+
+          <div class="dimension-row">
+            <div class="dimension-header">
+              <span class="dimension-name">2. Nội lực BCTC & Định giá</span>
+              <span class="dimension-val">82/100</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width: 82%; background: var(--bull-green);"></div>
+            </div>
+          </div>
+
+          <div class="dimension-row">
+            <div class="dimension-header">
+              <span class="dimension-name">3. Dòng tiền & Sức mạnh RS</span>
+              <span class="dimension-val">80/100</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width: 80%; background: var(--bull-green);"></div>
+            </div>
+          </div>
+
+          <div class="dimension-row">
+            <div class="dimension-header">
+              <span class="dimension-name">4. Kỹ thuật & Động lượng</span>
+              <span class="dimension-val">74/100</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width: 74%; background: var(--ref-yellow);"></div>
+            </div>
+          </div>
+
+          <div class="dimension-row">
+            <div class="dimension-header">
+              <span class="dimension-name">5. Chiến lược & R:R</span>
+              <span class="dimension-val">85/100</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width: 85%; background: var(--bull-green);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TOOL CARD 2: KEY RATIOS & T+2.5 PLAYBOOK -->
+      <div class="rating-card">
+        <div class="panel-header" style="margin: -14px -14px 10px -14px; border-radius: 8px 8px 0 0;">
+          <span>TÓM TẮT LỆNH T+2,5 & CHỈ SỐ CỐT LÕI</span>
+        </div>
+
+        <div class="playbook-mini">
+          <div class="playbook-row">
+            <span class="playbook-lbl">P/E TTM / P/B:</span>
+            <span class="playbook-val c-green">11.4x / 1.45x</span>
+          </div>
+          <div class="playbook-row">
+            <span class="playbook-lbl">ROE / Biên gộp:</span>
+            <span class="playbook-val c-green">15.8% / 15.4%</span>
+          </div>
+          <div class="playbook-row">
+            <span class="playbook-lbl">Nợ Vay / VCSH (D/E):</span>
+            <span class="playbook-val c-blue">0.52x</span>
+          </div>
+          <div class="playbook-row">
+            <span class="playbook-lbl">CFO / LNST:</span>
+            <span class="playbook-val c-green">1.18x</span>
+          </div>
+          <div class="playbook-row">
+            <span class="playbook-lbl">Vùng mua / Price-Stop:</span>
+            <span class="playbook-val c-green">28.00–28.50 / 26.60</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TOOL CARD 3: SCENARIO PROBABILITY WIDGET -->
+      <div class="rating-card">
+        <div class="panel-header" style="margin: -14px -14px 10px -14px; border-radius: 8px 8px 0 0;">
+          <span>XÁC SUẤT 3 KỊCH BẢN</span>
+        </div>
+
+        <div class="playbook-mini">
+          <div class="playbook-row">
+            <span class="playbook-lbl" style="color: var(--bull-green);">🟢 Tích cực (Target 34.0):</span>
+            <span class="playbook-val c-green">55%</span>
+          </div>
+          <div class="playbook-row">
+            <span class="playbook-lbl" style="color: var(--ref-yellow);">🟡 Cơ sở (Target 31.5):</span>
+            <span class="playbook-val c-yellow">30%</span>
+          </div>
+          <div class="playbook-row">
+            <span class="playbook-lbl" style="color: var(--bear-red);">🔴 Tiêu cực (Stop 26.6):</span>
+            <span class="playbook-val c-red">15%</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER WORKSPACE -->
+    <section class="main-workspace">
+
+      <!-- ENHANCED STOCK BANNER WITH FIREANT METRICS -->
+      <div class="stock-banner">
+        <div class="stock-banner-top">
+          <div class="stock-main-info">
+            <div class="symbol-pill" id="bannerSymbol">HPG</div>
+            <div class="stock-meta">
+              <div class="stock-name" id="bannerName">Tập đoàn Hòa Phát <span class="tag" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); margin-left: 6px;">NHÓM 3: SẢN XUẤT NỘI TẠI THẬT</span></div>
+              <div class="stock-sub">HOSE · Thép & Kim loại · Vốn hóa: 165.400 tỷ · Room ngoại: 24.8% · <span style="color: var(--bull-green); font-weight: 600;">Không vướng GDKHQ (•)</span></div>
+            </div>
+          </div>
+
+          <div class="stock-price-strip">
+            <div class="stock-current-price c-green" id="bannerPrice">28.45</div>
+            <div class="stock-delta c-green" id="bannerDelta">▲ +0.65 (+2.34%)</div>
+          </div>
+
+          <div class="stock-stats-inline">
+            <div class="stat-col">
+              <span class="stat-lbl">KL Khớp:</span>
+              <span class="stat-val">34.820.000 cp</span>
+            </div>
+            <div class="stat-col">
+              <span class="stat-lbl">Khối Ngoại:</span>
+              <span class="stat-val c-green">+84.2 tỷ</span>
+            </div>
+            <div class="stat-col">
+              <span class="stat-lbl">Hỗ trợ / Cản:</span>
+              <span class="stat-val">27.50 / 31.20</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- FIREANT FEATURE: 52-WEEK RANGE & ACTIVE ORDER RATIO -->
+        <div class="stock-banner-bottom">
+          <div class="range-box">
+            <div class="range-labels">
+              <span>Đáy 52T: <strong>21.00</strong></span>
+              <span style="color: var(--text-primary); font-weight: 700;">Vị trí giá: 78% dải 52 tuần</span>
+              <span>Đỉnh 52T: <strong>31.80</strong></span>
+            </div>
+            <div class="range-bar-track">
+              <div class="range-bar-progress"></div>
+              <div class="range-pin" title="Giá hiện tại: 28.45"></div>
+            </div>
+          </div>
+
+          <div class="active-order-box">
+            <div class="active-order-labels">
+              <span class="c-green">Mua chủ động: <strong>64.2%</strong> (22.3M)</span>
+              <span class="c-red">Bán chủ động: <strong>35.8%</strong> (12.5M)</span>
+            </div>
+            <div class="active-order-bar">
+              <div class="buy-fill" style="width: 64.2%;"></div>
+              <div class="sell-fill" style="width: 35.8%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- WORKSTATION TABS -->
+      <div class="tab-nav-bar">
+        <button class="tab-btn active" onclick="openTab('tab-summary')">
+          🎯 1. Nghiệp Vụ Thẩm Định
+        </button>
+        <button class="tab-btn" onclick="openTab('tab-forensic')">
+          📊 2. Bóc Tách BCTC & Định Giá
+        </button>
+        <button class="tab-btn" onclick="openTab('tab-smartmoney')">
+          🌊 3. Đọc Vị Tạo Lập & Dòng Tiền Cá Mập
+        </button>
+        <button class="tab-btn" onclick="openTab('tab-playbook')">
+          ⚔️ 4. Kế Hoạch Lệnh T+2.5
+        </button>
+        <button class="tab-btn" onclick="openTab('tab-chart')">
+          📈 5. Biểu Đồ Kỹ Thuật
+        </button>
+      </div>
+
+      <!-- TAB CONTENT AREA -->
+      <div class="tab-content-area">
+
+        <!-- TAB 1: EXECUTIVE SUMMARY -->
+        <div id="tab-summary" class="tab-pane active">
+
+          <!-- FORECAST AUDIT & SELF-CALIBRATION -->
+          <div class="forecast-audit-panel">
+            <div class="audit-header">
+              <div class="audit-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2F81F7" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <span>ĐỐI CHIẾU DỰ BÁO CŨ & TỰ ĐÚC RÚT KINH NGHIỆM (FORECAST AUDIT)</span>
+              </div>
+              <span class="audit-badge-correct">CHÍNH XÁC · 88% CHUẨN XÁC</span>
+            </div>
+            <div class="audit-meta">
+              Lần phân tích trước: <strong>25/10/2026 (14 phiên trước)</strong> · Giá lúc dự báo: <strong class="c-yellow" style="font-family: var(--font-mono);">26.80</strong> &rarr; Giá thực tế hiện tại: <strong class="c-green" style="font-family: var(--font-mono);">28.45</strong> (+6.16%)
+            </div>
+            <div class="audit-grid-4">
+              <div class="audit-cell">
+                <div class="audit-cell-label">1. Hướng đi (Direction)</div>
+                <div class="audit-cell-val c-green">🟢 ĐÚNG (Dự báo UP &rarr; Thực tế +6.16% <span class="badge-tag badge-calc">[Tính toán]</span>)</div>
+              </div>
+              <div class="audit-cell">
+                <div class="audit-cell-label">2. Biên độ (Amplitude)</div>
+                <div class="audit-cell-val c-green">🟢 ĐÚNG (Dự báo 28.00–28.50 &rarr; Đỉnh 28.45 <span class="badge-tag badge-source">[Nguồn: Khớp lệnh]</span>)</div>
+              </div>
+              <div class="audit-cell">
+                <div class="audit-cell-label">3. Thời điểm (Timing)</div>
+                <div class="audit-cell-val c-yellow">🟡 ĐẠT MỘT PHẦN (Dự báo T+5 &rarr; T+7 bứt phá do rung lắc Index <span class="badge-tag badge-deduce">[Suy luận]</span>)</div>
+              </div>
+              <div class="audit-cell">
+                <div class="audit-cell-label">4. Điều kiện (Condition)</div>
+                <div class="audit-cell-val c-green">🟢 ĐẠT (Khối ngoại ngừng bán ròng, Vol đạt &gt;30M cp <span class="badge-tag badge-source">[Nguồn]</span>)</div>
+              </div>
+            </div>
+            <div class="audit-lessons">
+              <strong>Bài học tự đúc rút (Self-Calibration):</strong> Dự báo ngày 25/10/2026 chuẩn xác về hướng và biên độ tăng (+6.16%). Nới rộng biên độ thời gian thêm 2 phiên trong giai đoạn thị trường chung có thanh khoản dưới 15.000 tỷ/phiên. Giá đã tiệm cận sát vùng mục tiêu 28.50 <span class="badge-tag badge-source">[Nguồn]</span>. Cần nâng trailing stop bảo toàn lợi nhuận <span class="badge-tag badge-calc">[Tính toán]</span>.
+            </div>
+          </div>
+
+          <!-- BLUF Banner -->
+          <div class="bluf-banner">
+            <div class="bluf-badge">QUYẾT NGHỊ: MUA THĂM DÒ</div>
+            <div class="bluf-text">
+              <div class="bluf-title">Luận điểm cốt lõi của Nghiệp vụ:</div>
+              <div class="bluf-desc">
+                HPG bứt phá khỏi nền tích lũy 6 tuần <span class="badge-tag badge-calc">[Tính toán]</span> với dòng tiền tổ chức mua ròng 5 phiên liên tiếp (+340 tỷ) <span class="badge-tag badge-source">[Nguồn: HSX]</span>. Động lực tăng trưởng đến từ chu kỳ mở rộng công suất Dung Quất 2 giai đoạn 1 <span class="badge-tag badge-deduce">[Suy luận]</span>, trong khi biên gộp cải thiện 180 bps nhờ giá quặng sắt hạ nhiệt <span class="badge-tag badge-source">[Nguồn: BCTC Q3]</span>. Điểm vào lệnh chuẩn đạt R:R = 1:2.4 <span class="badge-tag badge-calc">[Tính toán]</span> với ngưỡng bảo vệ tại 26.60 (dưới ATR14) <span class="badge-tag badge-calc">[Tính toán]</span>.
+              </div>
+            </div>
+          </div>
+
+          <!-- ACTION GRID 2 -->
+          <div class="action-grid-2">
+            <div class="action-card buyer">
+              <div class="action-card-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                CHỈ THỊ CHO NGƯỜI CHƯA CÓ VỊ THẾ
+              </div>
+              <p>
+                Giải ngân đợt 1 (tỷ trọng 30%) trong vùng giá <strong>28.00 – 28.50</strong> khi có nhịp kiểm định lực cung <span class="badge-tag badge-deduce">[Suy luận]</span>. Gia tăng đủ vị thế khi khối lượng vượt 40 triệu đơn vị và giá đóng cửa trên 29.00 <span class="badge-tag badge-calc">[Tính toán]</span>.
+              </p>
+            </div>
+
+            <div class="action-card holder">
+              <div class="action-card-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                CHỈ THỊ CHO NGƯỜI ĐANG NẮM GIỮ
+              </div>
+              <p>
+                Tiếp tục nắm giữ vị thế trung hạn. Nâng mức chặn lãi (Trailing stop) lên <strong>27.20</strong> <span class="badge-tag badge-calc">[Tính toán]</span>. Chủ động chốt lời 40% vị thế ngắn hạn khi giá tiệm cận vùng cản tâm lý <strong>31.50 – 32.00</strong> <span class="badge-tag badge-assume">[Giả định]</span>.
+              </p>
+            </div>
+          </div>
+
+          <!-- EXPECTATION GAP ANALYSIS -->
+          <div class="data-table-wrapper">
+            <div class="table-caption">
+              <span>Bóc tách khoảng cách kỳ vọng (Expectation Gap / Priced-In)</span>
+              <span class="tag score-high">ĐỊNH GIÁ HẤP DẪN</span>
+            </div>
+            <table class="fiin-table">
+              <thead>
+                <tr>
+                  <th>YẾU TỐ PHÂN TÍCH</th>
+                  <th>THỊ TRƯỜNG ĐANG ĐỊNH GIÁ</th>
+                  <th>GÓC NHÌN ĐỘC LẬP NGHIỆP VỤ (VARIANT VIEW)</th>
+                  <th>HỆ QUẢ TÁC ĐỘNG</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Tăng trưởng LNST 2026</td>
+                  <td class="c-yellow">+15% – 18% YoY <span class="badge-tag badge-source">[Nguồn: Đồng thuận CTCK]</span></td>
+                  <td class="c-green">+24% – 28% YoY (Đóng góp Dung Quất 2) <span class="badge-tag badge-deduce">[Suy luận]</span></td>
+                  <td class="c-green">Dư địa tăng giá +18% <span class="badge-tag badge-calc">[Tính toán]</span></td>
+                </tr>
+                <tr>
+                  <td>Biên lợi nhuận gộp</td>
+                  <td>Đi ngang quanh 13.5% <span class="badge-tag badge-source">[Nguồn]</span></td>
+                  <td class="c-green">Mở rộng lên 15.2% nhờ hạ giá quặng than <span class="badge-tag badge-calc">[Tính toán]</span></td>
+                  <td class="c-green">EPS forward 2.650đ <span class="badge-tag badge-calc">[Tính toán]</span></td>
+                </tr>
+                <tr>
+                  <td>Áp lực nợ vay CAPEX</td>
+                  <td class="c-red">Lo ngại áp lực chi phí lãi vay <span class="badge-tag badge-assume">[Giả định]</span></td>
+                  <td class="c-blue">CFO dồi dào (31.000 tỷ), D/E chỉ 0.52x <span class="badge-tag badge-source">[Nguồn: BCTC]</span></td>
+                  <td>Rủi ro thanh khoản rất thấp <span class="badge-tag badge-deduce">[Suy luận]</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- MA TRẬN 6 GIẢ THUYẾT NGUYÊN NHÂN BIẾN ĐỘNG GIÁ (CAUSAL HYPOTHESES MATRIX) -->
+          <div class="data-table-wrapper" style="margin-top: 14px;">
+            <div class="table-caption">
+              <span>Ma Trận 6 Giả Thuyết Nguyên Nhân Biến Động Giá (Causal Hypotheses Matrix)</span>
+              <span class="tag score-high">&Sigma; Xác suất = 100% · Chuẩn CFA</span>
+            </div>
+            <table class="fiin-table">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">MÃ</th>
+                  <th style="width: 220px;">GIẢ THUYẾT NGUYÊN NHÂN</th>
+                  <th style="width: 140px;">XÁC SUẤT</th>
+                  <th>ĐỘNG LỰC / BẰNG CHỨNG HỖ TRỢ</th>
+                  <th>ĐIỀU KIỆN KIỂM CHỨNG &amp; NGƯỠNG PHỦ ĐỊNH</th>
+                  <th style="width: 120px;">PHÁN QUYẾT</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="c-green" style="font-family: var(--font-mono); font-weight: 700;">H1</td>
+                  <td><strong>Tạo lập gom hàng tích lũy / Rũ bỏ chân sóng</strong></td>
+                  <td>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span class="c-green" style="font-family: var(--font-mono); font-weight: 700;">45%</span>
+                      <span style="font-size: 10px; color: var(--text-muted);">Điểm: 85</span>
+                    </div>
+                    <div class="hypo-bar-container">
+                      <div class="hypo-bar" style="width: 45%; background: var(--bull-green);"></div>
+                    </div>
+                  </td>
+                  <td>Dòng tiền cá mập mua ròng +68.5 tỷ, kê lệnh đỡ giá 909K cp <span class="badge-tag badge-source">[Nguồn: Sổ lệnh]</span></td>
+                  <td>Nến bứt phá vượt 29.00 với vol &gt;40M cp; phủ định nếu gãy 26.60 <span class="badge-tag badge-calc">[Tính toán]</span></td>
+                  <td><span class="tag score-high">Ủng hộ mạnh</span></td>
+                </tr>
+                <tr>
+                  <td class="c-blue" style="font-family: var(--font-mono); font-weight: 700;">H2</td>
+                  <td><strong>Khối ngoại / Quỹ ETF cơ cấu mua ròng chu kỳ</strong></td>
+                  <td>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span class="c-blue" style="font-family: var(--font-mono); font-weight: 700;">20%</span>
+                      <span style="font-size: 10px; color: var(--text-muted);">Điểm: 65</span>
+                    </div>
+                    <div class="hypo-bar-container">
+                      <div class="hypo-bar" style="width: 20%; background: var(--accent-blue);"></div>
+                    </div>
+                  </td>
+                  <td>Khối ngoại mua ròng liên tiếp 5 phiên đạt +340 tỷ <span class="badge-tag badge-source">[Nguồn: HSX]</span></td>
+                  <td>Duy trì mua ròng &gt;50 tỷ/phiên; phủ định nếu quay lại bán ròng đột biến <span class="badge-tag badge-deduce">[Suy luận]</span></td>
+                  <td><span class="tag score-mid">Khả năng cao</span></td>
+                </tr>
+                <tr>
+                  <td class="c-blue" style="font-family: var(--font-mono); font-weight: 700;">H3</td>
+                  <td><strong>Sóng ngành Thép &amp; Vĩ mô thế giới (HRC phục hồi)</strong></td>
+                  <td>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span class="c-blue" style="font-family: var(--font-mono); font-weight: 700;">15%</span>
+                      <span style="font-size: 10px; color: var(--text-muted);">Điểm: 58</span>
+                    </div>
+                    <div class="hypo-bar-container">
+                      <div class="hypo-bar" style="width: 15%; background: var(--accent-blue);"></div>
+                    </div>
+                  </td>
+                  <td>Giá thép HRC thế giới tạo đáy quanh 540 USD/tấn <span class="badge-tag badge-source">[Nguồn: Bloomberg]</span></td>
+                  <td>Biên gộp ngành giữ vững &gt;14%; phủ định nếu HRC gãy 520 USD <span class="badge-tag badge-calc">[Tính toán]</span></td>
+                  <td><span class="tag score-mid">Khả năng cao</span></td>
+                </tr>
+                <tr>
+                  <td class="c-yellow" style="font-family: var(--font-mono); font-weight: 700;">H4</td>
+                  <td><strong>Tái định giá theo tiến độ Dung Quất 2 (Re-rating)</strong></td>
+                  <td>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span class="c-yellow" style="font-family: var(--font-mono); font-weight: 700;">10%</span>
+                      <span style="font-size: 10px; color: var(--text-muted);">Điểm: 45</span>
+                    </div>
+                    <div class="hypo-bar-container">
+                      <div class="hypo-bar" style="width: 10%; background: var(--ref-yellow);"></div>
+                    </div>
+                  </td>
+                  <td>Kỳ vọng đóng góp doanh thu mới từ lò cao số 1 giai đoạn 1 <span class="badge-tag badge-deduce">[Suy luận]</span></td>
+                  <td>Nghiệm thu chạy thử đúng tiến độ; phủ định nếu hoãn vận hành <span class="badge-tag badge-assume">[Giả định]</span></td>
+                  <td><span class="tag" style="background: rgba(255,184,0,0.15); color: var(--ref-yellow);">Trung bình</span></td>
+                </tr>
+                <tr>
+                  <td class="c-red" style="font-family: var(--font-mono); font-weight: 700;">H5</td>
+                  <td><strong>Bẫy tăng giá / Phân phối kéo xả (Bull-trap / Churning)</strong></td>
+                  <td>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span class="c-red" style="font-family: var(--font-mono); font-weight: 700;">7%</span>
+                      <span style="font-size: 10px; color: var(--text-muted);">Điểm: 25</span>
+                    </div>
+                    <div class="hypo-bar-container">
+                      <div class="hypo-bar" style="width: 7%; background: var(--bear-red);"></div>
+                    </div>
+                  </td>
+                  <td>Khối lượng tăng nhưng biên độ nến hẹp trong 2 phiên trước <span class="badge-tag badge-calc">[Tính toán]</span></td>
+                  <td>Đóng cửa thủng hỗ trợ 27.20 với vol lớn &gt;45M cp <span class="badge-tag badge-calc">[Tính toán]</span></td>
+                  <td><span class="tag" style="background: rgba(255,59,48,0.15); color: var(--bear-red);">Ít khả năng</span></td>
+                </tr>
+                <tr>
+                  <td style="color: var(--text-muted); font-family: var(--font-mono); font-weight: 700;">H6</td>
+                  <td><strong>Tâm lý FOMO truyền thông / Tin đồn nhỏ lẻ</strong></td>
+                  <td>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <span style="color: var(--text-muted); font-family: var(--font-mono); font-weight: 700;">3%</span>
+                      <span style="font-size: 10px; color: var(--text-muted);">Điểm: 15</span>
+                    </div>
+                    <div class="hypo-bar-container">
+                      <div class="hypo-bar" style="width: 3%; background: var(--text-muted);"></div>
+                    </div>
+                  </td>
+                  <td>Lực mua lệnh nhỏ &lt;200M bị bán ròng -18.4 tỷ (nhỏ lẻ không FOMO) <span class="badge-tag badge-source">[Nguồn: Tape]</span></td>
+                  <td>Nhỏ lẻ đua lệnh trần hàng loạt; phủ định vì thanh khoản chủ yếu là cá mập <span class="badge-tag badge-deduce">[Suy luận]</span></td>
+                  <td><span class="tag" style="background: rgba(148,163,184,0.15); color: var(--text-muted);">Ít khả năng</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 2: FORENSIC BCTC & VALUATION -->
+        <div id="tab-forensic" class="tab-pane">
+          <div class="data-table-wrapper">
+            <div class="table-caption">
+              <span>Điều tra chất lượng dòng tiền (Forensic Cash Flow & Core EBIT)</span>
+              <span class="tag score-high">CFO / NPAT = 1.18x (Cực sạch)</span>
+            </div>
+            <table class="fiin-table">
+              <thead>
+                <tr>
+                  <th>CHỈ TIÊU BCTC (TỶ ĐỒNG)</th>
+                  <th>Q4/2025</th>
+                  <th>Q1/2026</th>
+                  <th>Q2/2026</th>
+                  <th>Q3/2026 (GẦN NHẤT)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Doanh thu thuần</td>
+                  <td>34.250</td>
+                  <td>37.100</td>
+                  <td>39.400</td>
+                  <td class="c-green">42.150 (+23% YoY)</td>
+                </tr>
+                <tr>
+                  <td>Lợi nhuận gộp</td>
+                  <td>4.450</td>
+                  <td>5.190</td>
+                  <td>5.820</td>
+                  <td class="c-green">6.480 (Biên 15.4%)</td>
+                </tr>
+                <tr>
+                  <td>Lợi nhuận cốt lõi (Core EBIT)</td>
+                  <td>3.200</td>
+                  <td>3.850</td>
+                  <td>4.310</td>
+                  <td class="c-green">4.920 (Chiếm 92% LNTT)</td>
+                </tr>
+                <tr>
+                  <td>Lợi nhuận sau thuế (NPAT)</td>
+                  <td>2.850</td>
+                  <td>3.240</td>
+                  <td>3.680</td>
+                  <td class="c-green">4.120</td>
+                </tr>
+                <tr>
+                  <td>Dòng tiền thuần HĐKD (CFO)</td>
+                  <td>3.120</td>
+                  <td>3.800</td>
+                  <td>4.100</td>
+                  <td class="c-green">4.850 (Tiền mặt thực)</td>
+                </tr>
+                <tr>
+                  <td>Tỷ lệ Phải thu / Doanh thu</td>
+                  <td>11.2%</td>
+                  <td>10.8%</td>
+                  <td>10.4%</td>
+                  <td class="c-blue">9.8% (Không bị chiếm dụng)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- VALUATION BANDS -->
+          <div class="data-table-wrapper">
+            <div class="table-caption">
+              <span>Định vị P/E Band & P/B Band lịch sử 5 năm</span>
+              <span class="tag score-med">P/E = 11.4x (Dưới trung bình 5 năm)</span>
+            </div>
+            <table class="fiin-table">
+              <thead>
+                <tr>
+                  <th>PHƯƠNG PHÁP ĐỊNH GIÁ</th>
+                  <th>GIÁ TRỊ HIỆN TẠI</th>
+                  <th>TRUNG BÌNH 5 NĂM</th>
+                  <th>GIÁ MỤC TIÊU CƠ SỞ</th>
+                  <th>KHUYẾN NGHỊ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>P/E TTM</td>
+                  <td>11.4x</td>
+                  <td>13.8x (-1SD)</td>
+                  <td>33.500 đ</td>
+                  <td class="c-green">Định giá rẻ</td>
+                </tr>
+                <tr>
+                  <td>P/B vs ROE (16.2%)</td>
+                  <td>1.45x</td>
+                  <td>1.72x</td>
+                  <td>32.000 đ</td>
+                  <td class="c-green">Biên an toàn 18%</td>
+                </tr>
+                <tr>
+                  <td>EV / EBITDA</td>
+                  <td>6.2x</td>
+                  <td>7.5x</td>
+                  <td>34.200 đ</td>
+                  <td class="c-green">Hấp dẫn</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 3: SMART MONEY & SHARK TRACKER (FIREANT UPGRADE) -->
+        <!-- TAB 3: SMART MONEY & INSTITUTIONAL PLAYBOOK -->
+        <div id="tab-smartmoney" class="tab-pane">
+
+          <!-- THẨM ĐỊNH VI CẤU TRÚC TẠO LẬP & 3 GIẢ THUYẾT THAY THẾ -->
+          <div class="action-grid-2">
+            <div class="action-card" style="background: rgba(47, 129, 247, 0.05); border-color: rgba(47, 129, 247, 0.25);">
+              <div class="action-card-header" style="color: var(--accent-blue);">
+                🏷️ ĐỊNH DANH BẢN CHẤT TẠO LẬP (INSTITUTIONAL PERSONA)
+              </div>
+              <p style="font-size: 12px; line-height: 1.5;">
+                <strong>Nhóm 3: Sản xuất Nội tại thật (Core Production)</strong> <span class="badge-tag badge-source">[Nguồn]</span>. Tạo lập bao gồm Khối ngoại, Quỹ ETF và Tự doanh các CTCK lớn bảo kê giá vốn. Cổ phiếu đi lên theo mô hình bậc thang bền bỉ; Tạo lập thường đè gom tại nền cạn cung, tận dụng các nhịp rung lắc thị trường chung để rũ bỏ cung đeo bám <span class="badge-tag badge-deduce">[Suy luận]</span>.
+              </p>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+                Chiến thuật: Mua gom tại nền hỗ trợ · Cắt lỗ mẫu: 6.5% · Tỷ trọng NAV: tối đa 20% <span class="badge-tag badge-calc">[Tính toán]</span>
+              </div>
+            </div>
+
+            <div class="action-card" style="background: rgba(168, 85, 247, 0.05); border-color: rgba(168, 85, 247, 0.25);">
+              <div class="action-card-header" style="color: #c084fc;">
+                ⚖️ 3 GIẢ THUYẾT THAY THẾ (KHÔNG THAO TÚNG)
+              </div>
+              <ul style="font-size: 11.5px; line-height: 1.5; color: var(--text-secondary); margin-left: 16px;">
+                <li><strong>1. Cơ cấu quỹ ETF / Ngoại:</strong> Hoạt động giải ngân chu kỳ của Fubon &amp; VNM ETF <span class="badge-tag badge-source">[Nguồn]</span>.</li>
+                <li><strong>2. Luân chuyển ngành:</strong> Dòng tiền dịch chuyển từ BĐS/Ngân hàng sang Thép theo chu kỳ phục hồi vĩ mô <span class="badge-tag badge-deduce">[Suy luận]</span>.</li>
+                <li><strong>3. Tái định giá dòng tiền chiết khấu (Re-rating):</strong> EPS forward điều chỉnh tăng phản ánh Dung Quất 2 <span class="badge-tag badge-calc">[Tính toán]</span>.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- SHARK TRACKER GRID -->
+          <div class="shark-grid">
+            <div class="shark-card">
+              <div class="shark-tier c-green">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                LỆNH CÁ MẬP (&gt; 1 TỶ)
+              </div>
+              <div class="shark-val c-green">+68.5 tỷ</div>
+              <div class="shark-sub">Mua: 82.0 tỷ · Bán: 13.5 tỷ (Gom mạnh <span class="badge-tag badge-source">[Nguồn]</span>)</div>
+            </div>
+
+            <div class="shark-card">
+              <div class="shark-tier c-blue">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+                LỆNH SÓI (200M – 1 TỶ)
+              </div>
+              <div class="shark-val c-blue">+24.2 tỷ</div>
+              <div class="shark-sub">Mua: 45.6 tỷ · Bán: 21.4 tỷ <span class="badge-tag badge-calc">[Tính toán]</span></div>
+            </div>
+
+            <div class="shark-card">
+              <div class="shark-tier c-red">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="4"></circle></svg>
+                LỆNH CÁ CON (&lt; 200M)
+              </div>
+              <div class="shark-val c-red">-18.4 tỷ</div>
+              <div class="shark-sub">Nhỏ lẻ chốt lời ngắn hạn <span class="badge-tag badge-deduce">[Suy luận]</span></div>
+            </div>
+          </div>
+
+          <div class="action-grid-2">
+            <div class="data-table-wrapper">
+              <div class="table-caption">
+                <span>Dấu chân Khối Ngoại &amp; Tự Doanh 5 phiên</span>
+                <span class="badge-tag badge-source">[Nguồn: HSX]</span>
+              </div>
+              <table class="fiin-table">
+                <thead>
+                  <tr>
+                    <th>PHIÊN</th>
+                    <th>KHỐI NGOẠI (TỶ)</th>
+                    <th>TỰ DOANH (TỶ)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>08/11 (Hôm nay)</td>
+                    <td class="c-green">+84.2</td>
+                    <td class="c-green">+32.1</td>
+                  </tr>
+                  <tr>
+                    <td>07/11</td>
+                    <td class="c-green">+112.5</td>
+                    <td class="c-green">+45.0</td>
+                  </tr>
+                  <tr>
+                    <td>06/11</td>
+                    <td class="c-green">+95.0</td>
+                    <td class="c-red">-12.4</td>
+                  </tr>
+                  <tr>
+                    <td>05/11</td>
+                    <td class="c-red">-24.0</td>
+                    <td class="c-green">+18.2</td>
+                  </tr>
+                  <tr>
+                    <td>04/11</td>
+                    <td class="c-green">+72.3</td>
+                    <td class="c-green">+29.5</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="data-table-wrapper">
+              <div class="table-caption">
+                <span>Tape Reading, Sổ Lệnh &amp; Chu Kỳ Khối Ngoại (Quy Tắc Thực Chiến)</span>
+              </div>
+              <div style="padding: 12px; font-size: 12px; line-height: 1.6; color: var(--text-secondary);">
+                <p>• <strong>Tường đỡ Tạo lập (Order Book):</strong> Kê mua <strong>909.200 cp</strong> tại vùng hỗ trợ 27.50 – 27.80 (gấp 2,4 lần bên Bán) <span class="badge-tag badge-source">[Nguồn: Sổ lệnh]</span> &rarr; tay to đang há miệng gom hàng cắt lỗ của nhỏ lẻ <span class="badge-tag badge-deduce">[Suy luận]</span>.</p>
+                <p style="margin-top: 6px;">• <strong>Cú "Rút ván rũ hàng" (Spring / Wash-out):</strong> Nhịp nhúng thủng nền về 27.20 (lệch nền 1,1% &le; 2,5%) <span class="badge-tag badge-calc">[Tính toán]</span> chỉ để quét Stop-loss tự động, sau đó lập tức kéo rút chân vượt 28.45 với vol 34,8M cp &rarr; Rũ giả, không phải Gãy thật <span class="badge-tag badge-deduce">[Suy luận]</span>.</p>
+                <p style="margin-top: 6px;">• <strong>Bất đối xứng Khối lượng Khối ngoại:</strong> Sau chuỗi gom ròng đột biến (+112,5 tỷ &amp; +95,0 tỷ), nhịp bán ngày 05/11 thu hẹp về -24,0 tỷ (No Supply) <span class="badge-tag badge-source">[Nguồn: HSX]</span> rồi đảo chiều mua ròng dương +84,2 tỷ &rarr; xác nhận đáy ngắn hạn <span class="badge-tag badge-calc">[Tính toán]</span>.</p>
+                <p style="margin-top: 6px;">• <strong>Kiểm tra Bẫy "Xanh vỏ đỏ lòng":</strong> Đà tăng của HPG đồng thuận với nhóm Sản xuất cơ bản (không bị kéo ảo bởi trụ cô đặc VIC/VHM và không có hiện tượng "Neo giá xả ngầm") <span class="badge-tag badge-calc">[Tính toán]</span>.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: TRADE PLAYBOOK & PRE-MORTEM -->
+        <div id="tab-playbook" class="tab-pane">
+
+          <!-- 3 CHỐT CHẶN THOÁT LỆNH: PRICE-STOP | THESIS-STOP | TIME-STOP -->
+          <div class="stops-container">
+            <div class="table-caption" style="margin-bottom: 6px;">
+              <span>3 Chốt Chặn Thoát Lệnh (Three-Stop Exit Defense System)</span>
+              <span class="tag" style="background: rgba(255, 59, 48, 0.15); color: var(--bear-red);">PHÒNG THỦ ĐA LỚP</span>
+            </div>
+            <div class="stops-grid">
+              <div class="stop-card price-stop">
+                <div class="stop-header">
+                  <span class="stop-badge stop-badge-price">PRICE-STOP</span>
+                  <span class="stop-title">Cắt Lỗ Kỹ Thuật &amp; Tự Động</span>
+                </div>
+                <div class="stop-val c-red">26.60 (-6.5%)</div>
+                <div class="stop-desc">
+                  <strong>Ngưỡng đệm:</strong> Dưới đáy nến gom lớn nhất của Tạo lập và cách điểm vào lệnh &ge; 1.5&times;ATR14 (tối đa 12%) <span class="badge-tag badge-calc">[Tính toán]</span>.
+                </div>
+                <div class="stop-action">
+                  <strong>Hành động:</strong> Kích hoạt lệnh dừng tự động (Stop-Order) cắt lỗ 100% vị thế, không do dự <span class="badge-tag badge-source">[Nguồn]</span>.
+                </div>
+              </div>
+
+              <div class="stop-card thesis-stop">
+                <div class="stop-header">
+                  <span class="stop-badge stop-badge-thesis">THESIS-STOP</span>
+                  <span class="stop-title">Bẻ Gãy Luận Điểm Cơ Bản</span>
+                </div>
+                <div class="stop-val" style="color: #c084fc;">HRC &lt; 520 USD / Thủng 27.20</div>
+                <div class="stop-desc">
+                  <strong>Điều kiện bẻ gãy:</strong> Giá HRC thế giới gãy 520 USD/tấn HOẶC Biên gộp Q4/2026 dưới 12% HOẶC Dung Quất 2 trễ tiến độ <span class="badge-tag badge-deduce">[Suy luận]</span>.
+                </div>
+                <div class="stop-action">
+                  <strong>Hành động:</strong> Bán chủ động ngay trong phiên (kể cả hòa vốn hoặc lỗ nhẹ), không chờ chạm Price-Stop <span class="badge-tag badge-source">[Nguồn]</span>.
+                </div>
+              </div>
+
+              <div class="stop-card time-stop">
+                <div class="stop-header">
+                  <span class="stop-badge stop-badge-time">TIME-STOP</span>
+                  <span class="stop-title">Giới Hạn Kẹp Vốn T+</span>
+                </div>
+                <div class="stop-val c-yellow">Sau T+10 &rarr; T+15 Phiên</div>
+                <div class="stop-desc">
+                  <strong>Điều kiện thời gian:</strong> Sau T+10 phiên không bứt phá vượt 29.20 và thanh khoản trôi dưới MA20 dù thị trường sôi động <span class="badge-tag badge-assume">[Giả định]</span>.
+                </div>
+                <div class="stop-action">
+                  <strong>Hành động:</strong> Sau T+10 không vượt nền thì hạ 50% tỷ trọng, sau T+15 tất toán để giải phóng dòng tiền sang cơ hội khác <span class="badge-tag badge-calc">[Tính toán]</span>.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ĐỒNG HỒ SINH HỌC T+2.5 (3 KHUNG GIỜ TÁC CHIẾN) -->
+          <div class="shark-grid" style="margin-bottom: 12px;">
+            <div class="shark-card" style="border-left: 3px solid var(--bear-red);">
+              <div class="shark-tier c-red">🕘 09h00 – 10h30: BẪY HƯNG PHẤN</div>
+              <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin: 4px 0;">ĐỨNG NGOÀI QUAN SÁT</div>
+              <div class="shark-sub">Cấm mua đuổi giá xanh / Gap Up đầu phiên khi thanh khoản thấp để tránh bẫy kẹp T+ khi lấp Gap buổi trưa <span class="badge-tag badge-deduce">[Suy luận]</span>.</div>
+            </div>
+            <div class="shark-card" style="border-left: 3px solid var(--ref-yellow);">
+              <div class="shark-tier c-yellow">🕐 13h00 – 13h45: THỬ LỬA HÀNG T+2,5</div>
+              <div style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin: 4px 0;">KIỂM TRA HẤP THỤ VOL NỔ</div>
+              <div class="shark-sub">Hàng nổ vol 33,19M cp về tài khoản chỉ nhúng nhẹ 1,1% rồi được hấp thụ hết &rarr; Xác nhận giữ nhịp tăng <span class="badge-tag badge-calc">[Tính toán]</span>.</div>
+            </div>
+            <div class="shark-card" style="border-left: 3px solid var(--bull-green);">
+              <div class="shark-tier c-green">🕑 13h45 – 14h25: KHUNG GIỜ PHÁN QUYẾT</div>
+              <div style="font-size: 12px; font-weight: 700; color: var(--bull-green); margin: 4px 0;">THỜI ĐIỂM BẤM NÚT DUY NHẤT</div>
+              <div class="shark-sub">Chỉ mở mua / cắt lỗ sau 14h00 dựa trên nến đóng cửa ngày và tốc độ hấp thụ tại vùng hỗ trợ <span class="badge-tag badge-source">[Nguồn]</span>.</div>
+            </div>
+          </div>
+
+          <div class="data-table-wrapper">
+            <div class="table-caption">
+              <span>Bản thiết kế tác chiến T+2,5 &amp; Công thức Chốt lời 3 Nhịp (30% - 50% - 20%)</span>
+              <span class="tag score-high">R:R = 1:2.4 · ĐỆM 1.5×ATR</span>
+            </div>
+            <table class="fiin-table">
+              <thead>
+                <tr>
+                  <th>HẠNG MỤC TÁC CHIẾN</th>
+                  <th>THÔNG SỐ ĐỀ XUẤT</th>
+                  <th>CƠ SỞ THỰC CHIẾN T+2,5 &amp; KỶ LUẬT ĐI VỐN</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Định danh Bản chất Cổ phiếu</td>
+                  <td class="c-blue">Nhóm 3: Sản xuất Nội tại thật</td>
+                  <td>Tổ chức &amp; Khối ngoại bảo kê giá vốn; đi lên theo bậc thang, mua gom tại nền cạn cung <span class="badge-tag badge-deduce">[Suy luận]</span></td>
+                </tr>
+                <tr>
+                  <td>Vùng mua gom tại nền</td>
+                  <td class="c-green">28.00 – 28.50 (Sau 13h45)</td>
+                  <td>Thị trường chỉnh "Cưa chân bàn" thanh khoản thấp &rarr; giữ nền 3–4 phiên thì gom 30%–40% <span class="badge-tag badge-calc">[Tính toán]</span></td>
+                </tr>
+                <tr>
+                  <td>Điểm dừng lỗ (Stop Order)</td>
+                  <td class="c-red">26.60 (-6.5%)</td>
+                  <td>Dưới đáy nến gom hàng lớn nhất của tổ chức và cách điểm mua &ge; 1.5&times;ATR14 <span class="badge-tag badge-calc">[Tính toán]</span></td>
+                </tr>
+                <tr>
+                  <td>🎯 Chốt lời Nhịp 1 (Bán 30%)</td>
+                  <td class="c-green">30.30 – 30.80 (+6.5% &rarr; +8%)</td>
+                  <td><strong>Khóa lợi nhuận cơ bản:</strong> Chủ động bán 30% ngay khi chạm kháng cự ngắn hạn <span class="badge-tag badge-source">[Nguồn]</span></td>
+                </tr>
+                <tr>
+                  <td>🛡️ Chốt lời Nhịp 2 (Giữ 50%)</td>
+                  <td class="c-yellow">Trailing Stop: 27.88 – 28.02</td>
+                  <td><strong>Cưỡi sóng bằng Chặn lãi trượt:</strong> Cài lệnh điều kiện lùi <strong>1,5% – 2,0%</strong> từ đỉnh cao nhất phiên <span class="badge-tag badge-calc">[Tính toán]</span></td>
+                </tr>
+                <tr>
+                  <td>🚀 Chốt lời Nhịp 3 (Giữ 20% cuối)</td>
+                  <td class="c-green">32.50 – 34.00 (Gap 09h15–09h30)</td>
+                  <td><strong>Ăn trọn quán tính FOMO:</strong> Giữ qua đêm nếu đóng nến xanh đặc gần đỉnh, bán vào Gap sáng hôm sau <span class="badge-tag badge-assume">[Giả định]</span></td>
+                </tr>
+                <tr>
+                  <td>Bộ lọc Sự kiện Quyền &amp; BCTC</td>
+                  <td class="c-green">An toàn (Không vướng GDKHQ)</td>
+                  <td>Áp dụng quy tắc "Né trước chốt (T-1, T-2) – Bắt sau chia"; gom khi bị đè trước ngày ra BCTC hợp nhất <span class="badge-tag badge-source">[Nguồn]</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- BẢNG CHECKLIST 5 PHÚT TRƯỚC KHI BẤM LỆNH (PHẦN VI) -->
+          <div class="data-table-wrapper">
+            <div class="table-caption">
+              <span>📋 Bảng Checklist 5 Phút Trước Khi Bấm Lệnh (Dành cho người bận rộn ngoài công trường)</span>
+              <span class="tag score-high">ĐẠT 5/5 TIÊU CHÍ AN TOÀN</span>
+            </div>
+            <table class="fiin-table">
+              <thead>
+                <tr>
+                  <th>5 CÂU HỎI KIỂM SOÁT TRƯỚC LỆNH</th>
+                  <th>TRẠNG THÁI</th>
+                  <th>CHI TIẾT KIỂM TRA NHANH</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1. Mã này có vướng GDKHQ chia tách trong 3 ngày tới không?</td>
+                  <td class="c-green">🟢 KHÔNG VƯỚNG</td>
+                  <td>Không có ký hiệu • trên bảng điện; không bị giam vốn cổ tức cổ phiếu hay chịu 5% thuế TNCN <span class="badge-tag badge-source">[Nguồn]</span></td>
+                </tr>
+                <tr>
+                  <td>2. Giá mua đang ở vùng hỗ trợ cạn cung hay mua đuổi Gap Up sáng?</td>
+                  <td class="c-green">🟢 TẠI NỀN HỖ TRỢ</td>
+                  <td>Cách nền hỗ trợ 27.80 chỉ +2.3%; giải ngân trong khung Phán quyết 13h45–14h25 chiều <span class="badge-tag badge-calc">[Tính toán]</span></td>
+                </tr>
+                <tr>
+                  <td>3. Khối ngoại / Tổ chức đang gom ròng hay xả ẩn (Churning)?</td>
+                  <td class="c-green">🟢 TỔ CHỨC GOM RÒNG</td>
+                  <td>Khối ngoại mua ròng +84.2 tỷ; Lệnh Cá mập (&gt;1 tỷ) mua ròng +68.5 tỷ; Kê đỡ 909K cp <span class="badge-tag badge-source">[Nguồn]</span></td>
+                </tr>
+                <tr>
+                  <td>4. Lượng hàng nổ thanh khoản kỷ lục có về tài khoản vào chiều mai?</td>
+                  <td class="c-green">🟢 ĐÃ HẤP THỤ XONG</td>
+                  <td>Phiên nổ vol 06/11 đã về tài khoản chiều 08/11 và hấp thụ hết, không lo áp lực xả T+2,5 ngày mai <span class="badge-tag badge-calc">[Tính toán]</span></td>
+                </tr>
+                <tr>
+                  <td>5. Đã cài sẵn lệnh điều kiện Stop Order &amp; Price Alert chưa?</td>
+                  <td class="c-yellow">⚡ CÀI NGAY SAU KHỚP</td>
+                  <td>Đặt Price Alert tại 27.50 &amp; Stop Order tự động tại 26.60 (Trailing Stop 1,5%–2% khi có lãi) <span class="badge-tag badge-assume">[Giả định]</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- PRE-MORTEM CARD -->
+          <div class="premortem-box">
+            <div class="premortem-icon">⚠️</div>
+            <div class="premortem-body">
+              <strong>PRE-MORTEM (Kịch bản giả định thua lỗ):</strong> "Nếu 3 tháng tới khoản đầu tư HPG bị lỗ 15%, nguyên nhân lớn nhất sẽ là gì?"
+              <br>&rarr; <em>Nguy cơ:</em> Giá thép cuộn cán nóng (HRC) thế giới sụt giảm mạnh do các nhà máy Trung Quốc tăng cường bán phá giá + Đồng USD tăng mạnh vượt 25.800 làm phát sinh lỗ chênh lệch tỷ giá nợ vay nhập khẩu quặng <span class="badge-tag badge-deduce">[Suy luận]</span>.
+              <br>&rarr; <strong>Hành động phòng vệ:</strong> Thoát toàn bộ vị thế nếu giá thép HRC giảm thủng 520 USD/tấn hoặc HPG đóng cửa gãy mốc 26.60 với thanh khoản vượt 45 triệu đơn vị <span class="badge-tag badge-calc">[Tính toán]</span>.
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: CHART -->
+        <div id="tab-chart" class="tab-pane">
+          <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; height: 480px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted);">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 12px; opacity: 0.6;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            <div style="font-weight: 700; font-size: 14px; color: var(--text-primary);">Tích hợp Biểu Đồ Nến Kỹ Thuật (TradingView Chart)</div>
+            <div style="font-size: 12px; margin-top: 4px;">Khung thời gian Ngày / Tuần · Khối lượng · MA20 · MA50 · Volume Profile</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // Tab Switching Logic
+    function openTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+
+      event.currentTarget.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    // Interactive Stock Selection
+    function switchStock(sym, price, delta, score) {
+      document.querySelectorAll('#watchlistBody tr').forEach(r => r.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+
+      document.getElementById('symbolInput').value = sym;
+      document.getElementById('bannerSymbol').innerText = sym;
+      document.getElementById('bannerPrice').innerText = price.toFixed(2);
+      
+      const deltaSign = delta >= 0 ? '▲ +' : '▼ ';
+      const deltaColor = delta >= 0 ? 'c-green' : 'c-red';
+      const deltaEl = document.getElementById('bannerDelta');
+      deltaEl.innerText = `${deltaSign}${delta}%`;
+      deltaEl.className = `stock-delta ${deltaColor}`;
+      document.getElementById('bannerPrice').className = `stock-current-price ${deltaColor}`;
+
+      if (sym === 'FPT') {
+        document.getElementById('bannerName').innerText = 'Công ty Cổ phần FPT';
+      } else if (sym === 'SSI') {
+        document.getElementById('bannerName').innerText = 'Chứng khoán SSI';
+      } else if (sym === 'VCB') {
+        document.getElementById('bannerName').innerText = 'Ngân hàng Vietcombank';
+      } else {
+        document.getElementById('bannerName').innerText = 'Tập đoàn Hòa Phát';
+      }
+    }
+
+    function simulateAnalyze() {
+      const sym = document.getElementById('symbolInput').value.toUpperCase();
+      alert(`Đang kích hoạt Nghiệp Vụ AI thẩm định dữ liệu chuyên sâu cho mã ${sym}...`);
+    }
+  </script>
+</body>
+</html>

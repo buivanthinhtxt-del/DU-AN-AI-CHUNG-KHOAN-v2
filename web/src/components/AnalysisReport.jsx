@@ -1,14 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Info, Newspaper } from 'lucide-react';
 
+function getVerificationBadgeClass(tag) {
+  if (tag.startsWith('[Nguồn')) return 'badge-tag badge-source';
+  if (tag.startsWith('[Tính toán')) return 'badge-tag badge-calc';
+  if (tag.startsWith('[Suy luận')) return 'badge-tag badge-deduce';
+  if (tag.startsWith('[Giả định')) return 'badge-tag badge-assume';
+  if (tag.startsWith('[Chưa xác định')) return 'badge-tag badge-unknown';
+  if (tag.startsWith('[Mâu thuẫn nguồn')) return 'badge-tag badge-conflict';
+  return 'badge-tag';
+}
+
 function renderInlineFormatting(text) {
-  if (!text) return null;
-  const parts = text.split(/(\*\*.*?\*\*|\*[^*]+\*)/g);
+  if (!text || typeof text !== 'string') return text || null;
+  // Bắt bold (**...**), italic (*...*), và các nhãn kiểm chứng 2 tầng ([Nguồn...], [Tính toán...], [Suy luận...], [Giả định...], [Chưa xác định...], [Mâu thuẫn nguồn...])
+  const parts = text.split(/(\*\*.*?\*\*|\*[^*]+\*|\[(?:Nguồn|Tính toán|Suy luận|Giả định|Chưa xác định|Mâu thuẫn nguồn)[^\]]*\])/g);
   return parts.map((part, pi) => {
     if (part.startsWith('**') && part.endsWith('**')) {
+      const inner = part.slice(2, -2);
+      if (/^\[(?:Nguồn|Tính toán|Suy luận|Giả định|Chưa xác định|Mâu thuẫn nguồn)/.test(inner)) {
+        return (
+          <span key={pi} className={getVerificationBadgeClass(inner)}>
+            {inner}
+          </span>
+        );
+      }
       return (
         <strong key={pi} style={{ color: 'var(--text-active)' }}>
-          {part.slice(2, -2)}
+          {inner}
         </strong>
       );
     }
@@ -17,6 +36,13 @@ function renderInlineFormatting(text) {
         <em key={pi} style={{ color: 'var(--text-secondary)' }}>
           {part.slice(1, -1)}
         </em>
+      );
+    }
+    if (part.startsWith('[') && part.endsWith(']') && /^\[(?:Nguồn|Tính toán|Suy luận|Giả định|Chưa xác định|Mâu thuẫn nguồn)/.test(part)) {
+      return (
+        <span key={pi} className={getVerificationBadgeClass(part)}>
+          {part}
+        </span>
       );
     }
     return part;
@@ -165,7 +191,7 @@ export default function AnalysisReport({ analysisText, news, engine }) {
       <div className="glass-panel analysis-card">
         <div className="section-title">
           <FileText size={18} color="var(--accent-blue)" />
-          <h2>Báo Cáo Phân Tích Chuyên Sâu — Hội Đồng Đầu Tư AI</h2>
+          <h2>Báo Cáo Phân Tích Chuyên Sâu — Nghiệp Vụ AI</h2>
         </div>
 
         {(engine === 'rule_based' || (!engine && analysisText.includes('Chế độ Phân tích Định lượng Tự động'))) && (
