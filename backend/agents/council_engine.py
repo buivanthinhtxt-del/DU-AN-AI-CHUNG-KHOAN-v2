@@ -150,31 +150,45 @@ class DeterministicCouncilEngine:
         pb = fin_overview.get("pb") or fin_ratios.get("pb")
         roe = fin_ratios.get("roe") or 15.0
 
-        # Kiểm tra giả lập CFO vs NI dựa trên sector hoặc dữ liệu
+        # Chất lượng lợi nhuận: CHỈ dùng BCTC quý thật (financial_quality); thiếu dữ liệu thì nói rõ là thiếu
+        cfq = (financials or {}).get("cashflow_quality") or {}
+        events = (financials or {}).get("corporate_events") or {}
         is_paper_profit = False
-        forensic_score = 78
-        fundamental_verdict: Any = "ƯU_TÚ"
-        cfo_note = (
-            f"Dòng tiền thuần từ HĐKD (CFO) dương ổn định, tỷ lệ CFO/Lợi nhuận sau thuế đạt trên 0.85x. "
-            f"Chất lượng lợi nhuận thực chất, két sắt dồi dào tiền mặt, không có dấu hiệu xào nấu sổ sách."
-        )
-
-        if roe < 8.0 or (pe and pe > 30):
-            forensic_score = 62
-            fundamental_verdict = "TRUNG_BÌNH"
+        balance_risks: List[str] = []
+        if cfq.get("available") and not cfq.get("is_financial_company") and cfq.get("cfo_to_npat_ttm") is not None:
+            ratio = float(cfq["cfo_to_npat_ttm"])
             cfo_note = (
-                f"Dòng tiền CFO có dấu hiệu suy giảm nhẹ so với kỳ trước. "
-                f"Tỷ lệ ROE đạt {roe:.1f}%, cần giám sát chặt chẽ khoản phải thu khách hàng."
+                f"BCTC quý thật ({cfq.get('source')}, kỳ gần nhất {cfq.get('latest_period')}): CFO 4 quý "
+                f"{cfq.get('cfo_ttm_bn')} tỷ so với LNST 4 quý {cfq.get('npat_ttm_bn')} tỷ → CFO/LNST = {ratio:.2f}x."
             )
+            verdict_map = {"TOT": (80, "ƯU_TÚ"), "TRUNG_BINH": (64, "TRUNG_BÌNH"), "YEU": (42, "RỦI_RO_CAO")}
+            forensic_score, fundamental_verdict = verdict_map.get(cfq.get("verdict"), (60, "TRUNG_BÌNH"))
+            is_paper_profit = cfq.get("verdict") == "YEU"
+            balance_risks = list(cfq.get("flags") or [])
+            for label, key in (("Doanh thu", "revenue_yoy_pct"), ("Phải thu ngắn hạn", "receivables_yoy_pct"),
+                               ("Hàng tồn kho", "inventory_yoy_pct")):
+                if cfq.get(key) is not None:
+                    balance_risks.append(f"{label} {cfq[key]:+.1f}% so với cùng kỳ ({cfq.get('latest_period')}).")
+        elif cfq.get("available") and cfq.get("is_financial_company"):
+            forensic_score, fundamental_verdict = 60, "TRUNG_BÌNH"
+            cfo_note = (f"Doanh nghiệp tài chính ({cfq.get('company_form')}): tỷ lệ CFO/LNST không phản ánh chất lượng lợi nhuận; "
+                        f"LNST 4 quý {cfq.get('npat_ttm_bn')} tỷ. Cần đánh giá nợ xấu, NIM, CAR thay thế.")
+            balance_risks = list(cfq.get("flags") or [])
+        else:
+            forensic_score, fundamental_verdict = 55, "TRUNG_BÌNH"
+            cfo_note = ("CHƯA CÓ dữ liệu BCTC quý (CFO/LNST) cho mã này tại thời điểm phân tích — "
+                        "không kết luận về chất lượng lợi nhuận. Cần kiểm tra BCTC gốc trước khi giải ngân.")
+            if roe < 8.0 or (pe and pe > 30):
+                balance_risks.append(f"ROE {roe:.1f}% / P/E {pe if pe else 'N/A'} kém hấp dẫn — cần thận trọng.")
+        if not balance_risks:
+            balance_risks = ["Không phát hiện cờ đỏ ở CFO, phải thu, tồn kho trong dữ liệu quý hiện có."]
 
-        balance_risks = [
-            "Tỷ lệ nợ vay/VCSH ở mức an toàn dưới 1.2x, áp lực lãi vay trong tầm kiểm soát",
-            "Khoản phải thu và hàng tồn kho không có biến động đột biến so với doanh thu",
-        ]
-        rights_evaluation = (
-            "Rà soát lịch sự kiện: Không có lịch chốt quyền cổ tức cổ phiếu hoặc phát hành thêm gây pha loãng trong 30 ngày tới. "
-            "Tuân thủ nghiêm ngặt tôn chỉ 'Né trước chốt – Bắt sau chia'!"
+        rights_evaluation = events.get("advice") or (
+            "Chưa có dữ liệu lịch sự kiện quyền — tự kiểm tra ngày GDKHQ (cổ tức cổ phiếu, phát hành thêm) "
+            "trước khi giao dịch theo nguyên tắc 'Né trước chốt – Bắt sau chia'."
         )
+        if events.get("stance") == "NE_TRUOC_CHOT":
+            forensic_score = max(30, forensic_score - 8)
 
         huyet_vu_rep = HuyetVuLauReport(
             forensic_score=forensic_score,
@@ -184,9 +198,11 @@ class DeterministicCouncilEngine:
             rights_event_evaluation=rights_evaluation,
             fundamental_verdict=fundamental_verdict,
             martial_speech=(
-                f"Bẩm Minh Chủ! Huyết Vũ Lâu ta đã mổ xẻ tường tận sổ sách của {symbol}. "
-                f"Chân khí nội lực đạt {forensic_score}/100 điểm. Lợi nhuận không phải là phù vân ảo ảnh, "
-                "dòng tiền CFO đủ lực bảo vệ huyết mạch doanh nghiệp!"
+                f"Bẩm Minh Chủ! Huyết Vũ Lâu ta đã mổ xẻ sổ sách của {symbol}. "
+                f"Chân khí nội lực đạt {forensic_score}/100 điểm. "
+                + ("Cảnh giác: lợi nhuận chưa chuyển thành tiền thật — có dấu hiệu lãi trên giấy!" if is_paper_profit
+                   else "Dòng tiền CFO đã được đối chiếu với BCTC công bố." if cfq.get("available")
+                   else "Sổ sách chưa trích lục được, không dám kết luận bừa!")
             ),
         )
 
@@ -206,6 +222,14 @@ class DeterministicCouncilEngine:
             "Nến kiểm định cung cầu (Test for Supply) biên độ hẹp với khối lượng cạn kiệt",
             "Dòng tiền tạo lập giữ vững nền giá, không có hiện tượng bán tháo tháo chạy",
         ]
+        shark = (quant_profile or {}).get("shark_flow") or {}
+        if shark.get("available"):
+            st = shark.get("tiers", {})
+            vsa_signals.insert(0, (
+                f"Shark Tracker (tick thật {shark.get('session_date')}, độ phủ {shark.get('coverage_pct')}% KL phiên): "
+                f"Cá Mập ròng {st.get('shark', {}).get('net_value_bn')} tỷ, Sói {st.get('wolf', {}).get('net_value_bn')} tỷ, "
+                f"Cá Con {st.get('sheep', {}).get('net_value_bn')} tỷ — {shark.get('signal_note')}"
+            ))
         t25_warning = (
             f"Bẫy rung lắc T+2.5: Canh chừng khung 13h00-13h45 khi lô hàng nổ volume về tài khoản. "
             f"Nếu phe mua hấp thụ trọn vẹn và đóng nến trên {entry_low:,.2f} sau 14h00 thì mở vị thế gom hàng."
@@ -906,6 +930,32 @@ class CouncilEngine:
 # ==============================================================================
 # HÀM GỌI TIỆN ÍCH (ENTRY POINT HELPER)
 # ==============================================================================
+REAL_DATA_TIMEOUT_S = 20.0
+
+
+async def _gather_real_data(symbol: str) -> Dict[str, Any]:
+    """Tải song song dữ liệu thật; nguồn nào quá REAL_DATA_TIMEOUT_S thì bỏ qua (luồng nền vẫn chạy & ghi cache)."""
+    try:
+        from backend.financial_quality import get_cashflow_quality, get_corporate_events
+        from backend.shark_tracker import get_shark_flow
+    except ImportError:  # chạy với backend/ trong sys.path
+        from financial_quality import get_cashflow_quality, get_corporate_events  # type: ignore
+        from shark_tracker import get_shark_flow  # type: ignore
+
+    async def _one(name: str, fn):
+        try:
+            return name, await asyncio.wait_for(asyncio.to_thread(fn, symbol), REAL_DATA_TIMEOUT_S)
+        except Exception as e:  # noqa: BLE001 — gồm cả TimeoutError
+            logger.warning(f"[Council] Bỏ qua dữ liệu thật '{name}' cho {symbol}: {type(e).__name__} {e}")
+            return name, None
+
+    pairs = await asyncio.gather(
+        _one("cashflow_quality", get_cashflow_quality),
+        _one("corporate_events", get_corporate_events),
+        _one("shark_flow", get_shark_flow),
+    )
+    return dict(pairs)
+
 async def run_council_debate(
     symbol: str,
     horizon: str = "Swing (1–3 tháng)",
@@ -966,6 +1016,14 @@ async def run_council_debate(
         except Exception as e:
             logger.warning(f"[!] Không thể tải financials cho {sym}: {e}")
             financials = {}
+
+    # 4. Dữ liệu thật: BCTC quý (CFO), lịch GDKHQ, Shark Tracker tick — chỉ khi phân tích thời điểm hiện tại
+    #    (phân tích lùi ngày target_date sẽ bị "nhìn trước tương lai" nếu dùng dữ liệu hôm nay).
+    if not target_date:
+        real = await _gather_real_data(sym)
+        financials = {**(financials or {}), **{k: v for k, v in real.items() if k != "shark_flow" and v}}
+        if real.get("shark_flow"):
+            quant_profile = {**(quant_profile or {}), "shark_flow": real["shark_flow"]}
 
     await emit_progress(progress_cb, 0, "done")
     engine = CouncilEngine(use_llm=use_llm, db_path=db_path)

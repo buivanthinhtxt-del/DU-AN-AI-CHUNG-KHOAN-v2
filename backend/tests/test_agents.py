@@ -752,14 +752,16 @@ class TestMultiAgentDebateWorkflow(unittest.TestCase):
             ("SSI", make_sample_df(start=32.0, seed=3)),
         ]
         for sym, mock_df in test_cases:
-            res = asyncio.run(
-                run_council_debate(
-                    symbol=sym,
-                    df=mock_df,
-                    use_llm=False,
-                    db_path=self.test_db_path,
+            # Không gọi mạng: dữ liệu thật (BCTC/GDKHQ/tick) được mock rỗng
+            with patch("backend.agents.council_engine._gather_real_data", new=AsyncMock(return_value={})):
+                res = asyncio.run(
+                    run_council_debate(
+                        symbol=sym,
+                        df=mock_df,
+                        use_llm=False,
+                        db_path=self.test_db_path,
+                    )
                 )
-            )
             self.assertEqual(res["symbol"], sym)
             self.assertEqual(len(res["debate_transcript"]), 6)
             self.assertEqual(len(res["executive_summary"]["summary_lines"]), 3)

@@ -40,6 +40,12 @@ COOLDOWN_PER_MINUTE_S = 65
 COOLDOWN_PER_DAY_S = 3600
 COOLDOWN_NOT_FOUND_S = 24 * 3600
 RETRY_WAIT_S = 20
+COOLDOWN_TIMEOUT_S = 300
+# Timeout từng lần gọi (giây). Bản cũ 300s/lần × 6 model => có thể treo ~30 phút khi tra cứu web bị nghẽn.
+CALL_TIMEOUT_S = float(os.getenv("GEMINI_TIMEOUT_S", "90"))
+SEARCH_CALL_TIMEOUT_S = float(os.getenv("GEMINI_SEARCH_TIMEOUT_S", "75"))
+# Ngân sách tổng cho một lần generate() qua mọi model (giây)
+TOTAL_BUDGET_S = float(os.getenv("GEMINI_TOTAL_BUDGET_S", "180"))
 
 _cooldown: dict[str, float] = {}
 _lock = threading.Lock()
@@ -97,6 +103,9 @@ def classify_error(e: Exception) -> str:
         return "unavailable"
     if code == 400:
         return "bad_request"
+    low = msg.lower()
+    if "timed out" in low or "timeout" in low or type(e).__name__ in ("ReadTimeout", "ConnectTimeout", "TimeoutException"):
+        return "timeout"
     return "other"
 
 
@@ -109,6 +118,7 @@ def generate(
     models: Optional[list[str]] = None,
     label: str = "LLM",
     retry_on_rate_limit: bool = True,
+    budget_s: Optional[float] = None,
 ) -> tuple[str, str, object]:
     """
     Gọi Gemini với cơ chế failover giữa các model.
@@ -127,17 +137,27 @@ def generate(
         cfg["response_json_schema"] = json_schema
     if use_search:
         cfg["tools"] = [types.Tool(google_search=types.GoogleSearch())]
-    config = types.GenerateContentConfig(**cfg)
+    per_call_s = SEARCH_CALL_TIMEOUT_S if use_search else CALL_TIMEOUT_S
+    deadline = time.time() + (budget_s if budget_s is not None else TOTAL_BUDGET_S)
+
+    def _config_for_remaining() -> types.GenerateContentConfig:
+        # Không để một lần gọi vượt quá phần ngân sách còn lại (tối thiểu 10s)
+        remaining = max(10.0, min(per_call_s, deadline - time.time()))
+        return types.GenerateContentConfig(**cfg, http_options=types.HttpOptions(timeout=int(remaining * 1000)))
 
     model_list = list(models or candidate_models(use_search))
     errors_seen = []
     for attempt in range(2):
         kinds = []
         for model in model_list:
+            if time.time() >= deadline:
+                errors_seen.append("hết ngân sách thời gian")
+                logger.warning(f"[{label}] Hết ngân sách {TOTAL_BUDGET_S:.0f}s → dừng thử model khác")
+                raise LLMUnavailable("; ".join(errors_seen))
             t0 = time.time()
             try:
                 logger.info(f"[{label}] Gọi model {model}...")
-                resp = client.models.generate_content(model=model, contents=prompt, config=config)
+                resp = client.models.generate_content(model=model, contents=prompt, config=_config_for_remaining())
                 text = (resp.text or "").strip()
                 if not text:
                     errors_seen.append(f"{model}: phản hồi rỗng")
@@ -159,10 +179,14 @@ def generate(
                         _cooldown[_ck(model, use_search)] = time.time() + (COOLDOWN_PER_DAY_S if per_day else COOLDOWN_PER_MINUTE_S)
                     elif kind == "not_found":
                         _cooldown[model + "|404"] = time.time() + COOLDOWN_NOT_FOUND_S
+                    elif kind == "timeout":
+                        # Model đang nghẽn (thường gặp với Google Search grounding) → bỏ qua tạm 5 phút
+                        _cooldown[_ck(model, use_search)] = time.time() + COOLDOWN_TIMEOUT_S
                 continue
         # Mọi model đều bị giới hạn THEO PHÚT → chờ ngắn rồi thử lại một lượt (giới hạn RPM hồi lại rất nhanh)
         retryable = [m for m, k in zip(model_list, kinds) if k in ("quota", "unavailable", "empty")]
-        if retry_on_rate_limit and attempt == 0 and retryable and not any("theo ngày" in e for e in errors_seen):
+        if (retry_on_rate_limit and attempt == 0 and retryable and not any("theo ngày" in e for e in errors_seen)
+                and deadline - time.time() > RETRY_WAIT_S + 15):
             logger.warning(f"[{label}] Tất cả model đang bị giới hạn tạm thời → chờ {RETRY_WAIT_S}s rồi thử lại")
             time.sleep(RETRY_WAIT_S)
             model_list = retryable

@@ -1045,6 +1045,10 @@
   </style>
 </head>
 <body>
+  <div role="note" style="background:#3b2f0a;color:#fde68a;border-bottom:1px solid #a16207;padding:8px 16px;font-size:12px;line-height:1.5;">
+    ⚠️ <strong>Trang demo giao diện tĩnh:</strong> giá, chỉ số và các nhãn <em>[Nguồn]</em> trên trang này là số liệu MINH HỌA cách trình bày, không phải dữ liệu thị trường thật.
+    Riêng khối <strong>Shark Tracker</strong> (tab Smart Money) tự tải khớp lệnh từng lô thật khi trang chạy cùng máy chủ. Phân tích thật: dùng Workstation chính tại <a href="/" style="color:#fbbf24;">trang chủ</a>.
+  </div>
 
   <!-- TOP WORKSTATION NAVBAR -->
   <header class="top-navbar">
@@ -1772,9 +1776,9 @@
           </div>
 
           <!-- MOCK DATA BANNER FOR SHARK TRACKER -->
-          <div style="background: rgba(234, 179, 8, 0.1); border: 1px dashed #eab308; border-radius: 6px; padding: 10px 14px; margin-top: 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: #fde047;">
+          <div id="sharkBanner" style="background: rgba(234, 179, 8, 0.1); border: 1px dashed #eab308; border-radius: 6px; padding: 10px 14px; margin-top: 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: #fde047;">
             <span style="font-size: 16px;">⚠️</span>
-            <span><strong>Mock Data Ý Tưởng (Chưa có Tick Data L2/L3 thật):</strong> Phân tầng quy mô lệnh Cá mập / Sói / Cá con là giao diện minh họa ý tưởng thiết kế, hệ thống hiện tại chưa kết nối luồng dữ liệu khớp lệnh từng tick (Tick Data) thời gian thực.</span>
+            <span id="sharkBannerText"><strong>Mock Data Ý Tưởng (Chưa có Tick Data L2/L3 thật):</strong> Phân tầng quy mô lệnh Cá mập / Sói / Cá con là giao diện minh họa ý tưởng thiết kế, hệ thống hiện tại chưa kết nối luồng dữ liệu khớp lệnh từng tick (Tick Data) thời gian thực.</span>
           </div>
 
           <!-- SHARK TRACKER GRID -->
@@ -1784,8 +1788,8 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
                 LỆNH CÁ MẬP (&gt; 1 TỶ)
               </div>
-              <div class="shark-val c-green">+68.5 tỷ</div>
-              <div class="shark-sub">Mua: 82.0 tỷ · Bán: 13.5 tỷ (Mô phỏng gom mạnh <span class="badge-tag badge-assume">[Mô phỏng ý tưởng]</span>)</div>
+              <div class="shark-val c-green" id="shark-val-shark">+68.5 tỷ</div>
+              <div class="shark-sub" id="shark-sub-shark">Mua: 82.0 tỷ · Bán: 13.5 tỷ (Mô phỏng gom mạnh <span class="badge-tag badge-assume">[Mô phỏng ý tưởng]</span>)</div>
             </div>
 
             <div class="shark-card">
@@ -1793,8 +1797,8 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
                 LỆNH SÓI (200M – 1 TỶ)
               </div>
-              <div class="shark-val c-blue">+24.2 tỷ</div>
-              <div class="shark-sub">Mua: 45.6 tỷ · Bán: 21.4 tỷ <span class="badge-tag badge-assume">[Mô phỏng ý tưởng]</span></div>
+              <div class="shark-val c-blue" id="shark-val-wolf">+24.2 tỷ</div>
+              <div class="shark-sub" id="shark-sub-wolf">Mua: 45.6 tỷ · Bán: 21.4 tỷ <span class="badge-tag badge-assume">[Mô phỏng ý tưởng]</span></div>
             </div>
 
             <div class="shark-card">
@@ -1802,8 +1806,8 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="4"></circle></svg>
                 LỆNH CÁ CON (&lt; 200M)
               </div>
-              <div class="shark-val c-red">-18.4 tỷ</div>
-              <div class="shark-sub">Mô phỏng nhỏ lẻ chốt lời ngắn hạn <span class="badge-tag badge-assume">[Mô phỏng ý tưởng]</span></div>
+              <div class="shark-val c-red" id="shark-val-sheep">-18.4 tỷ</div>
+              <div class="shark-sub" id="shark-sub-sheep">Mô phỏng nhỏ lẻ chốt lời ngắn hạn <span class="badge-tag badge-assume">[Mô phỏng ý tưởng]</span></div>
             </div>
           </div>
 
@@ -2061,6 +2065,40 @@
   </main>
 
   <script>
+    // Shark Tracker: thay số mô phỏng bằng khớp lệnh từng lô THẬT (/api/shark/{mã}) khi chạy cùng máy chủ
+    async function loadRealShark(sym) {
+      const fmt = (v) => (v > 0 ? '+' : '') + Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 2 }) + ' tỷ';
+      try {
+        const res = await fetch('/api/shark/' + encodeURIComponent(sym));
+        if (!res.ok) return;
+        const d = await res.json();
+        if (!d.available) return;
+        ['shark', 'wolf', 'sheep'].forEach((k) => {
+          const t = d.tiers[k];
+          const val = document.getElementById('shark-val-' + k);
+          const sub = document.getElementById('shark-sub-' + k);
+          if (val) {
+            val.textContent = fmt(t.net_value_bn);
+            val.className = 'shark-val ' + (t.net_value_bn > 0 ? 'c-green' : t.net_value_bn < 0 ? 'c-red' : 'c-blue');
+          }
+          if (sub) sub.textContent = 'Mua chủ động ' + t.buy_value_bn + ' tỷ · Bán chủ động ' + t.sell_value_bn + ' tỷ · ATO/ATC ' + t.unknown_value_bn + ' tỷ · ' + t.count + ' lệnh';
+        });
+        const banner = document.getElementById('sharkBanner');
+        const text = document.getElementById('sharkBannerText');
+        if (banner && text) {
+          banner.style.background = 'rgba(52, 211, 153, 0.08)';
+          banner.style.borderColor = '#34d399';
+          banner.style.color = '#a7f3d0';
+          text.textContent = 'Dữ liệu THẬT ' + d.symbol + ' phiên ' + d.session_date + ': ' + d.tick_count + ' lệnh khớp (phủ ' + d.coverage_pct +
+            '% khối lượng phiên) — ' + d.signal_note + ' Nguồn: ' + d.source + '. ' + d.caveat;
+        }
+      } catch (e) { /* giữ nguyên nhãn mô phỏng khi không có máy chủ */ }
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      const input = document.getElementById('symbolInput');
+      loadRealShark((input && input.value) || 'HPG');
+    });
+
     // Tab Switching Logic
     function openTab(tabId) {
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -2072,6 +2110,7 @@
 
     // Interactive Stock Selection
     function switchStock(sym, price, delta, score) {
+      loadRealShark(sym);
       document.querySelectorAll('#watchlistBody tr').forEach(r => r.classList.remove('active'));
       event.currentTarget.classList.add('active');
 

@@ -195,6 +195,30 @@ export async function fetchCouncilDebateStream(symbolOrPayload, params = {}, onP
   throw new Error('Kết nối tới Hội Đồng Quân Cơ bị ngắt trước khi có Nghị quyết.');
 }
 
+async function getJson(path, fallbackMsg) {
+  const res = await fetch(`${API_BASE_URL}${path}`);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || fallbackMsg);
+  }
+  return res.json();
+}
+
+/** BCTC quý thật (CFO/LNST, phải thu, tồn kho) từ VNDirect Finfo. */
+export const fetchCashflowQuality = (symbol) =>
+  getJson(`/api/fundamentals/cashflow/${encodeURIComponent(symbol)}`, 'Không tải được BCTC quý.');
+
+/** Lịch sự kiện quyền (GDKHQ) + khuyến nghị "Né trước chốt – Bắt sau chia". */
+export const fetchCorporateEvents = (symbol) =>
+  getJson(`/api/events/${encodeURIComponent(symbol)}`, 'Không tải được lịch sự kiện quyền.');
+
+/** Shark Tracker từ dữ liệu khớp lệnh từng lô thật của phiên gần nhất. */
+export const fetchSharkFlow = (symbol, forceRefresh = false) =>
+  getJson(
+    `/api/shark/${encodeURIComponent(symbol)}${forceRefresh ? '?force_refresh=true' : ''}`,
+    'Không tải được dữ liệu khớp lệnh.',
+  );
+
 export async function fetchCouncilAgents() {
   const res = await fetch(`${API_BASE_URL}/api/council/agents`);
   if (!res.ok) {

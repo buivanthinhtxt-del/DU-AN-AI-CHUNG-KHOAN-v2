@@ -53,6 +53,8 @@ from fundamental_fetcher import (
 from forecast_audit import audit_historical_forecast, save_forecast_audit, get_forecast_scores
 from daily_scoring import run_daily_scoring, inprocess_scheduler_loop
 import db_backend
+from financial_quality import get_cashflow_quality, get_corporate_events
+from shark_tracker import get_shark_flow
 from macro_fetcher import get_macro_data
 from cache_manager import get_cache, set_cache
 from database import init_db, get_watchlist, add_watchlist, remove_watchlist
@@ -787,6 +789,34 @@ async def api_forecast_scores(symbol: Optional[str] = None, limit: int = 50):
     except Exception as e:
         logger.error(f"[!] Lỗi truy vấn forecast_scores: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Không thể truy vấn lịch sử chấm điểm.")
+
+
+# --- DỮ LIỆU THẬT: BCTC QUÝ (CFO), LỊCH SỰ KIỆN QUYỀN, SHARK TRACKER TICK ---
+
+def _clean_symbol(symbol: str) -> str:
+    sym = (symbol or "").upper().strip()
+    if not re.fullmatch(r"[A-Z0-9]{2,10}", sym):
+        raise HTTPException(status_code=400, detail="Mã cổ phiếu không hợp lệ.")
+    return sym
+
+
+@app.get("/api/fundamentals/cashflow/{symbol}")
+async def api_cashflow_quality(symbol: str):
+    """BCTC quý thật (CFO, LNST, phải thu, tồn kho) + chỉ số chất lượng lợi nhuận CFO/LNST."""
+    return await asyncio.to_thread(get_cashflow_quality, _clean_symbol(symbol))
+
+
+@app.get("/api/events/{symbol}")
+async def api_corporate_events(symbol: str, window_days: int = 30):
+    """Lịch sự kiện quyền (GDKHQ) thật + đánh giá 'Né trước chốt – Bắt sau chia'."""
+    window_days = max(3, min(int(window_days), 120))
+    return await asyncio.to_thread(get_corporate_events, _clean_symbol(symbol), window_days)
+
+
+@app.get("/api/shark/{symbol}")
+async def api_shark_flow(symbol: str, force_refresh: bool = False):
+    """Shark Tracker từ dữ liệu khớp lệnh từng lô thật của phiên gần nhất (có coverage_pct)."""
+    return await asyncio.to_thread(get_shark_flow, _clean_symbol(symbol), bool(force_refresh))
 
 
 # --- PHỤC VỤ GIAO DIỆN WEB REACT TÍCH HỢP (ALL-IN-ONE CLOUD WORKSTATION) ---

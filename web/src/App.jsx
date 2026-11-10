@@ -19,6 +19,7 @@ import LiveQuote from './components/LiveQuote';
 import ExecutiveSummaryBanner from './components/ExecutiveSummaryBanner';
 import AgentMeritBoard from './components/AgentMeritBoard';
 import CouncilDebate from './components/CouncilDebate';
+import RealDataPanel from './components/RealDataPanel';
 
 import {
   fetchMarketDataApi,
@@ -1253,6 +1254,13 @@ function App() {
             >
               📊 5. Chấm Điểm 5 Chiều Chi Tiết
             </button>
+            <button
+              type="button"
+              className={`ws-tab-btn ${activeTab === 'tab-realdata' ? 'active' : ''}`}
+              onClick={() => setActiveTab('tab-realdata')}
+            >
+              🦈 6. Dữ Liệu Thật: BCTC · GDKHQ · Shark Tracker
+            </button>
           </div>
 
           {/* TAB CONTENT AREA */}
@@ -1305,6 +1313,8 @@ function App() {
                 onSelectSymbol={handleSelectSymbol}
               />
             )}
+
+            {activeTab === 'tab-realdata' && <RealDataPanel symbol={symbol} />}
 
             {activeTab === 'tab-radar' && (
               <RadarScoreCard
