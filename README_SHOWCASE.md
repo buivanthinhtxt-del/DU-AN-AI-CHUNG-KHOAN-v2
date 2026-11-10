@@ -9,6 +9,9 @@
   <img src="https://img.shields.io/badge/AI_Engine-Gemini_2.5_Flash_%26_Pro-orange?style=for-the-badge&logo=google" alt="Gemini AI" />
   <img src="https://img.shields.io/badge/Thị_Trường-HOSE_%7C_HNX_%7C_UPCOM-red?style=for-the-badge" alt="Market VN" />
   <img src="https://img.shields.io/badge/License-MIT-purple?style=for-the-badge" alt="License" />
+  <a href="./METHODOLOGY.md">
+    <img src="https://img.shields.io/badge/Whitepaper-Khung_Thẩm_Định_CFA-indigo?style=for-the-badge&logo=readme&logoColor=white" alt="Methodology" />
+  </a>
 </p>
 
 <p align="center">
@@ -22,6 +25,10 @@
 
 <p align="center">
   <img src="./assets/hero.png" alt="Nghiệp Vụ AI Workstation V5.0" width="850px" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);" />
+</p>
+
+<p align="center">
+  📖 <b>Đọc tài liệu phương pháp luận:</b> <a href="./METHODOLOGY.md"><b>[Bạch thư Khung Thẩm Định Đầu Tư Thực Chiến T+2,5 & Tư Duy CFA]</b></a>
 </p>
 
 ---
