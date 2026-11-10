@@ -1021,8 +1021,10 @@ class TestFastAPICouncilEndpoints(unittest.TestCase):
             self.assertTrue(0 <= a["score"] <= 20)
 
     def test_post_council_reset_agents_endpoint(self):
-        """Xác minh POST /api/council/reset-agents trả về HTTP 200 và khôi phục 20 điểm cho toàn bộ 5 Agent."""
-        resp = self.client.post("/api/council/reset-agents")
+        """Xác minh POST /api/council/reset-agents yêu cầu X-Cron-Secret, trả về HTTP 200 và khôi phục 20 điểm cho 5 Agent."""
+        with patch.dict(os.environ, {"CRON_SECRET": "test-secret"}):
+            self.assertEqual(self.client.post("/api/council/reset-agents").status_code, 401)
+            resp = self.client.post("/api/council/reset-agents", headers={"X-Cron-Secret": "test-secret"})
         self.assertEqual(resp.status_code, 200)
 
         data = resp.json()

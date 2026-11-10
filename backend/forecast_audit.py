@@ -1,6 +1,9 @@
 """
 Hệ thống Tự đúc rút / Đối chiếu Dự báo Cũ (Forecast Audit Engine)
-Lưu trữ và đối chiếu dự báo lịch sử tại backend/cache/forecast_audit/{symbol}.json.
+Lưu trữ dự báo lịch sử:
+  - PostgreSQL (bảng forecast_records) khi có DATABASE_URL -> bền vững trên Render Free.
+  - Ngược lại: backend/cache/forecast_audit/{symbol}.json (chế độ cục bộ).
+Kết quả chấm điểm hằng ngày (cron sau 15h30) lưu ở bảng forecast_scores.
 Chấm điểm 4 chiều: Hướng (Direction), Biên độ (Amplitude), Thời điểm (Timing), Điều kiện (Condition).
 """
 import json
@@ -12,9 +15,52 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import db_backend
+
 logger = logging.getLogger(__name__)
 
 AUDIT_CACHE_DIR = Path(__file__).resolve().parent / "cache" / "forecast_audit"
+SCORES_SQLITE_PATH = Path(__file__).resolve().parent / "data" / "forecast_scores.db"
+MAX_RECORDS_PER_SYMBOL = 20
+
+_pg_ready = False
+
+
+def _ensure_pg_tables() -> None:
+    global _pg_ready
+    if _pg_ready:
+        return
+    with db_backend.connect(SCORES_SQLITE_PATH) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS forecast_records (
+                forecast_id TEXT PRIMARY KEY,
+                symbol TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                record_json TEXT NOT NULL
+            );
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_forecast_records_symbol ON forecast_records (symbol, created_at);")
+    _pg_ready = True
+
+
+def _ensure_scores_table(db_path: Optional[str | Path] = None) -> None:
+    with db_backend.connect(SCORES_SQLITE_PATH, db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS forecast_scores (
+                symbol TEXT NOT NULL,
+                forecast_date TEXT NOT NULL,
+                scored_date TEXT NOT NULL,
+                overall_accuracy_pct REAL,
+                verdict TEXT,
+                result_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (symbol, forecast_date, scored_date)
+            );
+            """
+        )
 
 
 def get_audit_cache_path(symbol: str) -> Path:
@@ -25,7 +71,20 @@ def get_audit_cache_path(symbol: str) -> Path:
 
 
 def load_forecast_records(symbol: str) -> List[Dict[str, Any]]:
-    """Đọc toàn bộ bản ghi dự báo lịch sử từ cache."""
+    """Đọc toàn bộ bản ghi dự báo lịch sử (Postgres nếu có DATABASE_URL, ngược lại file JSON)."""
+    if db_backend.postgres_enabled():
+        try:
+            _ensure_pg_tables()
+            sym = (symbol or "").upper().strip()
+            with db_backend.connect(SCORES_SQLITE_PATH) as conn:
+                rows = conn.execute(
+                    "SELECT record_json FROM forecast_records WHERE symbol = ? ORDER BY created_at ASC;",
+                    (sym,),
+                ).fetchall()
+            return [json.loads(r["record_json"]) for r in rows]
+        except Exception as e:
+            logger.warning(f"[!] Không thể đọc forecast_records (Postgres) cho {symbol}: {e}")
+            return []
     path = get_audit_cache_path(symbol)
     if not path.exists():
         return []
@@ -225,8 +284,7 @@ def save_forecast_audit(
     if not sym:
         return False
 
-    path = get_audit_cache_path(sym)
-    records = load_forecast_records(sym)
+    records = [] if db_backend.postgres_enabled() else load_forecast_records(sym)
 
     now_dt = datetime.now()
     date_str = current_date or now_dt.strftime("%Y-%m-%d")
@@ -281,10 +339,14 @@ def save_forecast_audit(
         "engine": str(forecast_record.get("engine") or "gemini"),
     }
 
+    if db_backend.postgres_enabled():
+        return _save_record_pg(sym, record_entry)
+
+    path = get_audit_cache_path(sym)
     records.append(record_entry)
     # Giữ tối đa 20 bản ghi gần nhất để tránh phình to tệp
-    if len(records) > 20:
-        records = records[-20:]
+    if len(records) > MAX_RECORDS_PER_SYMBOL:
+        records = records[-MAX_RECORDS_PER_SYMBOL:]
 
     temp_file = path.with_name(f"{path.stem}_{uuid.uuid4().hex[:8]}.tmp")
     try:
@@ -310,6 +372,118 @@ def save_forecast_audit(
             temp_file.unlink(missing_ok=True)
         except Exception:
             pass
+
+
+def _save_record_pg(sym: str, record_entry: Dict[str, Any]) -> bool:
+    try:
+        _ensure_pg_tables()
+        with db_backend.connect(SCORES_SQLITE_PATH) as conn:
+            conn.execute(
+                """
+                INSERT INTO forecast_records (forecast_id, symbol, created_at, record_json)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (forecast_id) DO UPDATE SET record_json = excluded.record_json;
+                """,
+                (record_entry["forecast_id"], sym, record_entry["created_at"],
+                 json.dumps(record_entry, ensure_ascii=False)),
+            )
+            # Giữ tối đa MAX_RECORDS_PER_SYMBOL bản ghi gần nhất cho mỗi mã
+            conn.execute(
+                """
+                DELETE FROM forecast_records
+                WHERE symbol = ? AND forecast_id NOT IN (
+                    SELECT forecast_id FROM forecast_records WHERE symbol = ?
+                    ORDER BY created_at DESC LIMIT ?
+                );
+                """,
+                (sym, sym, MAX_RECORDS_PER_SYMBOL),
+            )
+        return True
+    except Exception as e:
+        logger.error(f"[!] Lỗi khi lưu forecast_records (Postgres) cho {sym}: {e}", exc_info=True)
+        return False
+
+
+def list_tracked_symbols() -> List[str]:
+    """Danh sách mã đã có ít nhất 1 bản ghi dự báo (dùng cho cron chấm điểm hằng ngày)."""
+    if db_backend.postgres_enabled():
+        try:
+            _ensure_pg_tables()
+            with db_backend.connect(SCORES_SQLITE_PATH) as conn:
+                rows = conn.execute("SELECT DISTINCT symbol FROM forecast_records ORDER BY symbol;").fetchall()
+            return [r["symbol"] for r in rows]
+        except Exception as e:
+            logger.warning(f"[!] Không thể liệt kê mã từ forecast_records: {e}")
+            return []
+    if not AUDIT_CACHE_DIR.exists():
+        return []
+    return sorted(p.stem.upper() for p in AUDIT_CACHE_DIR.glob("*.json"))
+
+
+def save_forecast_score(
+    symbol: str,
+    scored_date: str,
+    audit_result: Dict[str, Any],
+    db_path: Optional[str | Path] = None,
+) -> bool:
+    """Lưu kết quả chấm điểm của dự báo gần nhất tại ngày scored_date (idempotent theo ngày)."""
+    last = audit_result.get("last_audit") or {}
+    if not last:
+        return False
+    try:
+        _ensure_scores_table(db_path)
+        with db_backend.connect(SCORES_SQLITE_PATH, db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO forecast_scores
+                    (symbol, forecast_date, scored_date, overall_accuracy_pct, verdict, result_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (symbol, forecast_date, scored_date) DO UPDATE SET
+                    overall_accuracy_pct = excluded.overall_accuracy_pct,
+                    verdict = excluded.verdict,
+                    result_json = excluded.result_json,
+                    created_at = excluded.created_at;
+                """,
+                (
+                    symbol.upper(),
+                    str(last.get("forecast_date") or "N/A"),
+                    scored_date,
+                    float(last.get("overall_accuracy_pct") or 0.0),
+                    str(last.get("verdict") or ""),
+                    json.dumps(last, ensure_ascii=False),
+                    datetime.now().isoformat(),
+                ),
+            )
+        return True
+    except Exception as e:
+        logger.error(f"[!] Lỗi lưu forecast_scores cho {symbol}: {e}", exc_info=True)
+        return False
+
+
+def get_forecast_scores(
+    symbol: Optional[str] = None,
+    limit: int = 50,
+    db_path: Optional[str | Path] = None,
+) -> List[Dict[str, Any]]:
+    """Truy vấn lịch sử chấm điểm (mới nhất trước)."""
+    _ensure_scores_table(db_path)
+    cols = "symbol, forecast_date, scored_date, overall_accuracy_pct, verdict, result_json"
+    with db_backend.connect(SCORES_SQLITE_PATH, db_path) as conn:
+        if symbol:
+            rows = conn.execute(
+                f"SELECT {cols} FROM forecast_scores WHERE symbol = ? ORDER BY scored_date DESC LIMIT ?;",
+                (symbol.upper(), limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                f"SELECT {cols} FROM forecast_scores ORDER BY scored_date DESC, symbol LIMIT ?;",
+                (limit,),
+            ).fetchall()
+    out = []
+    for r in rows:
+        r["detail"] = json.loads(r.pop("result_json") or "{}")
+        out.append(r)
+    return out
 
 
 # Aliases tương thích đa giao diện

@@ -26,7 +26,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 
@@ -520,6 +520,32 @@ class DeterministicCouncilEngine:
 # ==============================================================================
 # ĐỘNG CƠ TRANH BIỆN GEMINI LLM CLIENT (COUNCIL ENGINE)
 # ==============================================================================
+# Tên các chặng hiển thị trên thanh tiến độ (frontend dùng cùng id)
+COUNCIL_STAGES = {
+    0: "Trích lục hồ sơ: giá, định lượng, BCTC, dự báo cũ",
+    1: "Minh Chủ Võ Lâm ban hành quân lệnh",
+    2: "Huyết Vũ Lâu & Phong Lang Đội lập báo cáo",
+    3: "Tham Mưu Các phản biện bác bỏ",
+    4: "Cẩm Y Vệ soát lỗi & xử phạt kỷ luật",
+    5: "Minh Chủ ban hành Nghị quyết tối hậu",
+}
+
+ProgressCallback = Callable[[Dict[str, Any]], Union[None, Awaitable[None]]]
+
+
+async def emit_progress(cb: Optional[ProgressCallback], stage: int, status: str, **extra: Any) -> None:
+    """Gửi sự kiện tiến độ {stage, status, label}; lỗi của callback không được làm hỏng phiên họp."""
+    if cb is None:
+        return
+    event = {"stage": stage, "status": status, "label": COUNCIL_STAGES.get(stage, ""), "ts": time.time(), **extra}
+    try:
+        res = cb(event)
+        if asyncio.iscoroutine(res):
+            await res
+    except Exception as e:  # pragma: no cover
+        logger.debug(f"[CouncilEngine] progress callback lỗi: {e}")
+
+
 class CouncilEngine:
     """
     Động cơ tranh biện chính tích hợp Gemini Structured Outputs.
@@ -543,6 +569,7 @@ class CouncilEngine:
         horizon: str = "Swing (1–3 tháng)",
         cost_basis: Optional[float] = None,
         position_pct: Optional[float] = None,
+        progress_cb: Optional[ProgressCallback] = None,
     ) -> Dict[str, Any]:
         symbol = (symbol or "VNINDEX").upper().strip()
         now_dt = datetime.now(timezone.utc)
@@ -569,6 +596,8 @@ class CouncilEngine:
                 position_pct=position_pct,
                 session_id=session_id,
             )
+            for st in range(1, 6):
+                await emit_progress(progress_cb, st, "done", engine="deterministic")
             # Lấy thông tin merit_scores mới nhất
             result["merit_scores"] = get_all_agents(self.db_path)
             # Lưu vết session vào SQLite
@@ -594,6 +623,7 @@ class CouncilEngine:
             dossier_json = json.dumps(dossier_ctx, ensure_ascii=False, default=str)
 
             # Stage 1: Minh Chủ ra quân lệnh
+            await emit_progress(progress_cb, 1, "running", engine="gemini")
             stage1_prompt = f"Bối cảnh hồ sơ cổ phiếu:\n{dossier_json}\n\nHãy ban hành chỉ thị tác chiến khai mạc cho Hội Đồng Quân Cơ."
             stage1_schema = llm_client.force_required(MinhChuDirective.model_json_schema())
             s1_text, _, _ = await asyncio.to_thread(
@@ -604,6 +634,8 @@ class CouncilEngine:
                 label=f"Council-{symbol}-Stage1-MinhChu",
             )
             directive = MinhChuDirective.model_validate_json(s1_text)
+            await emit_progress(progress_cb, 1, "done")
+            await emit_progress(progress_cb, 2, "running")
 
             # Stage 2: Huyết Vũ Lâu & Phong Lang Đội chạy song song
             async def run_huyet_vu():
@@ -639,6 +671,8 @@ class CouncilEngine:
                 return PhongLangDoiReport.model_validate_json(text)
 
             huyet_vu_rep, phong_lang_rep = await asyncio.gather(run_huyet_vu(), run_phong_lang())
+            await emit_progress(progress_cb, 2, "done")
+            await emit_progress(progress_cb, 3, "running")
 
             # Stage 3: Tham Mưu Các phản biện bác bỏ
             stage3_prompt = (
@@ -656,6 +690,8 @@ class CouncilEngine:
                 label=f"Council-{symbol}-Stage3-ThamMuu",
             )
             tham_muu_rep = ThamMuuCacReport.model_validate_json(s3_text)
+            await emit_progress(progress_cb, 3, "done")
+            await emit_progress(progress_cb, 4, "running")
 
             # Stage 4: Cẩm Y Vệ kiểm toán kỷ luật & đối chiếu lịch sử
             stage4_prompt = (
@@ -689,6 +725,9 @@ class CouncilEngine:
                 )
                 penalties_issued.append(pen)
 
+            await emit_progress(progress_cb, 4, "done", penalties=len(penalties_issued))
+            await emit_progress(progress_cb, 5, "running")
+
             # Stage 5: Minh Chủ Võ Lâm ban hành Nghị quyết Tối hậu
             stage5_prompt = (
                 f"Toàn bộ diễn biến phiên họp quân cơ:\n"
@@ -709,6 +748,7 @@ class CouncilEngine:
                 label=f"Council-{symbol}-Stage5-Resolution",
             )
             resolution = InvestmentResolution.model_validate_json(s5_text)
+            await emit_progress(progress_cb, 5, "done")
 
             # Ghép debate transcript
             debate_transcript = [
@@ -845,6 +885,8 @@ class CouncilEngine:
 
         except Exception as e:
             logger.warning(f"[CouncilEngine] Lỗi trong phiên họp Gemini ({e}), tự động chuyển sang DeterministicCouncilEngine.")
+            await emit_progress(progress_cb, 5, "fallback", engine="deterministic",
+                                message="Gemini lỗi/quá hạn — chuyển sang Hội đồng định lượng dự phòng")
             fallback_res = DeterministicCouncilEngine.run_debate(
                 symbol=symbol,
                 quant_profile=quant_profile,
@@ -877,6 +919,7 @@ async def run_council_debate(
     financials: Optional[Dict[str, Any]] = None,
     use_llm: bool = True,
     db_path: Optional[str | Path] = None,
+    progress_cb: Optional[ProgressCallback] = None,
 ) -> Dict[str, Any]:
     """
     Hàm entry point thực thi phiên họp Hội Đồng Quân Cơ.
@@ -888,6 +931,7 @@ async def run_council_debate(
     from backend.fundamental_fetcher import get_financial_statements
 
     sym = (symbol or "VNINDEX").upper().strip()
+    await emit_progress(progress_cb, 0, "running")
 
     # Tải dữ liệu giá lịch sử nếu chưa được truyền vào
     if df is None or df.empty:
@@ -923,6 +967,7 @@ async def run_council_debate(
             logger.warning(f"[!] Không thể tải financials cho {sym}: {e}")
             financials = {}
 
+    await emit_progress(progress_cb, 0, "done")
     engine = CouncilEngine(use_llm=use_llm, db_path=db_path)
     return await engine.run_debate(
         symbol=sym,
@@ -933,4 +978,5 @@ async def run_council_debate(
         horizon=horizon,
         cost_basis=cost_basis,
         position_pct=position_pct,
+        progress_cb=progress_cb,
     )

@@ -1,7 +1,7 @@
 """
 Hệ thống Quản lý Kỷ luật & Lưu trữ Bền vững Audit Log (Điểm Công Huân & Council Audit Store).
 
-Lưu trữ bền vững tại SQLite: `backend/data/council_audit.db`
+Lưu trữ bền vững: PostgreSQL đám mây khi có DATABASE_URL (vd: Neon), ngược lại SQLite `backend/data/council_audit.db`.
 Các quy chế chính:
 - Mỗi Agent bắt đầu với quỹ 20 Điểm Công Huân (Thế hệ 1).
 - Mỗi lần phạm lỗi, báo cáo sai, bịa đặt thông tin (hallucination): trừ 1 Điểm Công Huân (-1).
@@ -17,11 +17,15 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+try:  # ưu tiên module cấp cao nhất để dùng chung 1 pool kết nối với api.py / forecast_audit.py
+    import db_backend
+except ImportError:
+    from backend import db_backend
 
 logger = logging.getLogger("audit_store")
 
@@ -59,16 +63,19 @@ INITIAL_AGENTS = [
 ]
 
 
-def _get_connection(db_path: Optional[str | Path] = None) -> sqlite3.Connection:
-    target_path = Path(db_path) if db_path else AUDIT_DB_PATH
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(target_path), timeout=30.0)
-    conn.row_factory = sqlite3.Row
-    return conn
+def _get_connection(db_path: Optional[str | Path] = None) -> "db_backend.Connection":
+    """SQLite tại db_path/AUDIT_DB_PATH, hoặc Postgres (DATABASE_URL) khi db_path là None."""
+    return db_backend.open_connection(AUDIT_DB_PATH, db_path)
+
+
+_initialized_targets: set = set()
 
 
 def init_audit_db(db_path: Optional[str | Path] = None) -> None:
-    """Khởi tạo cơ sở dữ liệu SQLite council_audit.db nếu chưa có và gieo mầm 5 Agent ban đầu."""
+    """Khởi tạo bảng (SQLite hoặc Postgres) nếu chưa có và gieo mầm 5 Agent ban đầu."""
+    target_key = "postgres" if db_backend.use_postgres(db_path) else str(Path(db_path) if db_path else AUDIT_DB_PATH)
+    if target_key in _initialized_targets and (target_key == "postgres" or Path(target_key).exists()):
+        return
     with _db_lock:
         conn = _get_connection(db_path)
         try:
@@ -111,9 +118,9 @@ def init_audit_db(db_path: Optional[str | Path] = None) -> None:
 
             # 3. Bảng Nhật ký xử phạt vi phạm (Penalty Audit Log)
             cursor.execute(
-                """
+                f"""
                 CREATE TABLE IF NOT EXISTS agent_penalties (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    {db_backend.autoincrement_pk(db_path)},
                     session_id TEXT NOT NULL,
                     symbol TEXT NOT NULL,
                     agent_id TEXT NOT NULL,
@@ -130,13 +137,15 @@ def init_audit_db(db_path: Optional[str | Path] = None) -> None:
             for ag in INITIAL_AGENTS:
                 cursor.execute(
                     """
-                    INSERT OR IGNORE INTO agent_merit_profiles
+                    INSERT INTO agent_merit_profiles
                         (agent_id, name, role, generation, merit_points, warning_level, status, total_violations)
-                    VALUES (?, ?, ?, 1, 20, 0, 'HOAT_DONG', 0);
+                    VALUES (?, ?, ?, 1, 20, 0, 'HOAT_DONG', 0)
+                    ON CONFLICT (agent_id) DO NOTHING;
                     """,
                     (ag["agent_id"], ag["name"], ag["role"]),
                 )
             conn.commit()
+            _initialized_targets.add(target_key)
         finally:
             conn.close()
 
@@ -284,11 +293,12 @@ def apply_penalty(
                 """
                 INSERT INTO agent_penalties
                     (session_id, symbol, agent_id, agent_name, points_deducted, violation_type, reason, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id;
                 """,
                 (session_id, symbol, agent_id, agent_name, points_to_deduct, violation_type, reason, now_str),
             )
-            penalty_id = cursor.lastrowid
+            penalty_id = (cursor.fetchone() or {}).get("id")
 
             warning_event = None
             is_expelled = False
@@ -428,11 +438,21 @@ def save_council_session(
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT OR REPLACE INTO council_sessions
+                INSERT INTO council_sessions
                     (session_id, symbol, target_date, created_at, verdict,
                      executive_summary_json, radar_scores_json, trade_plan_json,
                      full_debate_json, penalties_issued_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (session_id) DO UPDATE SET
+                    symbol = excluded.symbol,
+                    target_date = excluded.target_date,
+                    created_at = excluded.created_at,
+                    verdict = excluded.verdict,
+                    executive_summary_json = excluded.executive_summary_json,
+                    radar_scores_json = excluded.radar_scores_json,
+                    trade_plan_json = excluded.trade_plan_json,
+                    full_debate_json = excluded.full_debate_json,
+                    penalties_issued_json = excluded.penalties_issued_json;
                 """,
                 (
                     session_id,
@@ -537,7 +557,7 @@ def reset_agents_merit(db_path: Optional[str | Path] = None) -> None:
                     INSERT INTO agent_merit_profiles
                         (agent_id, name, role, generation, merit_points, warning_level, status, total_violations, updated_at)
                     VALUES (?, ?, ?, 1, 20, 0, 'HOAT_DONG', 0, ?)
-                    ON CONFLICT(agent_id) DO UPDATE SET
+                    ON CONFLICT (agent_id) DO UPDATE SET
                         generation = 1,
                         merit_points = 20,
                         warning_level = 0,

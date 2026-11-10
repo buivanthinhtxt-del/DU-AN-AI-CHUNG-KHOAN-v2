@@ -121,6 +121,80 @@ export async function fetchCouncilDebate(symbolOrPayload, params = {}) {
   return res.json();
 }
 
+/**
+ * Phiên họp Hội Đồng Quân Cơ qua Server-Sent Events: gọi onProgress({stage, status, label})
+ * cho từng chặng 0..5, trả về payload đầy đủ khi có event "result".
+ * Nếu máy chủ cũ chưa có endpoint stream (404/405) hoặc trình duyệt không hỗ trợ đọc stream,
+ * tự động quay về fetchCouncilDebate thông thường.
+ */
+export async function fetchCouncilDebateStream(symbolOrPayload, params = {}, onProgress = () => {}) {
+  const payload =
+    typeof symbolOrPayload === 'string'
+      ? { symbol: symbolOrPayload, ...params }
+      : { ...symbolOrPayload, ...params };
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE_URL}/api/council/debate/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    return fetchCouncilDebate(payload);
+  }
+
+  if (res.status === 404 || res.status === 405 || !res.body?.getReader) {
+    return fetchCouncilDebate(payload);
+  }
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Lỗi phiên họp Hội Đồng Quân Cơ hoặc máy chủ bận.');
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  const handleBlock = (block) => {
+    let event = 'message';
+    const dataLines = [];
+    block.split('\n').forEach((line) => {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
+    });
+    if (!dataLines.length) return null;
+    const data = JSON.parse(dataLines.join('\n'));
+    if (event === 'progress') {
+      onProgress(data);
+      return null;
+    }
+    if (event === 'error') {
+      throw new Error(data.detail || 'Lỗi phiên họp Hội Đồng Quân Cơ.');
+    }
+    if (event === 'result') return { done: true, data };
+    return null;
+  };
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { value, done } = await reader.read();
+    if (value) buffer += decoder.decode(value, { stream: true });
+    let sep;
+    while ((sep = buffer.indexOf('\n\n')) !== -1) {
+      const block = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      const out = handleBlock(block);
+      if (out?.done) {
+        reader.cancel().catch(() => {});
+        return out.data;
+      }
+    }
+    if (done) break;
+  }
+  throw new Error('Kết nối tới Hội Đồng Quân Cơ bị ngắt trước khi có Nghị quyết.');
+}
+
 export async function fetchCouncilAgents() {
   const res = await fetch(`${API_BASE_URL}/api/council/agents`);
   if (!res.ok) {

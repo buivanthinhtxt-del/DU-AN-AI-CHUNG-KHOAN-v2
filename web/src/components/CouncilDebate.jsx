@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Crown,
   FileSearch,
@@ -15,6 +15,9 @@ import {
   ChevronUp,
   MessageSquare,
   Sparkles,
+  Circle,
+  Loader2,
+  Database,
 } from 'lucide-react';
 
 const AGENT_CONFIG = {
@@ -107,9 +110,79 @@ function formatTranscriptContent(text) {
   });
 }
 
+const PROGRESS_STAGES = [
+  { id: 0, icon: Database, color: '#94a3b8', label: 'Trích lục hồ sơ', sub: 'Giá, định lượng, BCTC, dự báo cũ' },
+  { id: 1, icon: Crown, color: '#fbbf24', label: 'Minh Chủ ra quân lệnh', sub: 'Giao chỉ tiêu cho các đường chủ' },
+  { id: 2, icon: FileSearch, color: '#f87171', label: 'Huyết Vũ & Phong Lang', sub: 'Mổ xẻ BCTC · canh bảng điện (song song)' },
+  { id: 3, icon: ShieldAlert, color: '#fb923c', label: 'Tham Mưu Các phản biện', sub: 'Tìm lý do bác bỏ, lập Bộ 3 Chốt Chặn' },
+  { id: 4, icon: Scale, color: '#a78bfa', label: 'Cẩm Y Vệ soát lỗi', sub: 'Đối chiếu lịch sử, xử phạt vi phạm' },
+  { id: 5, icon: Swords, color: '#fbbf24', label: 'Nghị quyết tối hậu', sub: 'Radar 5 trục & Banner hành động' },
+];
+
+function CouncilProgress({ progress = {} }) {
+  const stages = progress.stages || {};
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const elapsed = progress.startedAt ? Math.max(0, Math.round((now - progress.startedAt) / 1000)) : 0;
+  const doneCount = PROGRESS_STAGES.filter((st) => ['done', 'fallback'].includes(stages[st.id])).length;
+  const pct = Math.round((doneCount / PROGRESS_STAGES.length) * 100);
+  const hasEvents = Object.keys(stages).length > 0;
+
+  return (
+    <div className="ws-council-loading ws-council-progress" role="status" aria-live="polite">
+      <div className="ws-progress-head">
+        <span className="ws-loading-text">Hội Đồng Quân Cơ đang nghị sự…</span>
+        <span className="ws-progress-meta">
+          {doneCount}/{PROGRESS_STAGES.length} chặng · {elapsed}s
+        </span>
+      </div>
+      <div className="ws-progress-bar" aria-hidden="true">
+        <div className="ws-progress-fill" style={{ width: `${hasEvents ? Math.max(pct, 4) : 4}%` }} />
+      </div>
+      <ol className="ws-progress-steps">
+        {PROGRESS_STAGES.map((st) => {
+          const status = stages[st.id];
+          const Icon = st.icon;
+          const isDone = status === 'done' || status === 'fallback';
+          const isRunning = status === 'running';
+          return (
+            <li key={st.id} className={`ws-progress-step ${isDone ? 'is-done' : ''} ${isRunning ? 'is-running' : ''}`}>
+              <span className="ws-progress-icon" style={{ color: isDone || isRunning ? st.color : undefined }}>
+                {isDone ? (
+                  <CheckCircle2 size={16} />
+                ) : isRunning ? (
+                  <Loader2 size={16} className="ws-spin" />
+                ) : (
+                  <Circle size={16} />
+                )}
+              </span>
+              <span className="ws-progress-label">
+                <Icon size={12} style={{ color: st.color, marginRight: 4, verticalAlign: '-1px' }} />
+                {st.label}
+                <span className="ws-progress-sub">{st.sub}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      <div className="ws-loading-sub">
+        {progress.message
+          ? progress.message
+          : hasEvents
+            ? 'Mỗi chặng Gemini mất khoảng 15–20 giây (cả phiên ~1–1,5 phút). Bạn có thể xem các tab khác trong lúc chờ.'
+            : 'Đang kết nối máy chủ (máy chủ miễn phí có thể mất ~30–60 giây để thức dậy)…'}
+      </div>
+    </div>
+  );
+}
+
 export default function CouncilDebate({
   debate,
   loading = false,
+  progress = {},
   symbol = 'HPG',
   onRefresh,
 }) {
@@ -243,15 +316,7 @@ export default function CouncilDebate({
       {/* Diễn Biến Tranh Biện (Transcript Timeline) */}
       <div className="ws-council-timeline">
         {loading ? (
-          <div className="ws-council-loading">
-            <RefreshCw size={24} className="ws-spin" style={{ color: '#fbbf24' }} />
-            <div className="ws-loading-text">
-              Hội Đồng Quân Cơ đang tranh luận nảy lửa... Vui lòng đợi trong giây lát!
-            </div>
-            <div className="ws-loading-sub">
-              Huyết Vũ Lâu mổ xẻ BCTC · Phong Lang Đội canh bảng điện · Tham Mưu Các chuẩn bị bác bỏ...
-            </div>
-          </div>
+          <CouncilProgress progress={progress} />
         ) : filteredTranscript.length > 0 ? (
           filteredTranscript.map((item, idx) => {
             const agentKey = item.agent_id || 'minh_chu';

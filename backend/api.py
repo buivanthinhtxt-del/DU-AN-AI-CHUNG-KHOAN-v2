@@ -18,7 +18,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 try:
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
@@ -30,12 +30,13 @@ from collections import defaultdict
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import pandas as pd
 
 import hashlib
+import hmac
 import re
 from datetime import datetime, timezone
 
@@ -49,7 +50,9 @@ from fundamental_fetcher import (
     get_financial_statements,
     research_fundamentals_web,
 )
-from forecast_audit import audit_historical_forecast, save_forecast_audit
+from forecast_audit import audit_historical_forecast, save_forecast_audit, get_forecast_scores
+from daily_scoring import run_daily_scoring, inprocess_scheduler_loop
+import db_backend
 from macro_fetcher import get_macro_data
 from cache_manager import get_cache, set_cache
 from database import init_db, get_watchlist, add_watchlist, remove_watchlist
@@ -131,6 +134,7 @@ async def api_health():
         "status": "ok",
         "service": "nghiep-vu-ai-workstation-v5",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "storage": db_backend.storage_info(),
     }
 
 # [P0-SEC-01] Cấu hình CORS chuẩn RFC 6454: chỉ định danh sách Origin tin cậy, không dùng wildcard "*" khi có credentials
@@ -159,6 +163,29 @@ async def startup_event():
     # Khởi tạo database non-blocking
     await asyncio.to_thread(init_db)
     await asyncio.to_thread(init_audit_db)
+    storage = db_backend.storage_info()
+    if not storage.get("persistent"):
+        logger.warning("[!] Chưa cấu hình DATABASE_URL: dữ liệu Công Huân/dự báo sẽ mất khi container khởi động lại.")
+    if os.getenv("ENABLE_INPROCESS_CRON", "").strip() == "1":
+        app.state.scoring_task = asyncio.create_task(inprocess_scheduler_loop())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    task = getattr(app.state, "scoring_task", None)
+    if task:
+        task.cancel()
+    await asyncio.to_thread(db_backend.close_pool)
+
+
+def _require_admin_secret(request: Request) -> None:
+    """Bảo vệ các endpoint quản trị/cron bằng header X-Cron-Secret = biến môi trường CRON_SECRET."""
+    expected = os.getenv("CRON_SECRET", "").strip()
+    if not expected:
+        raise HTTPException(status_code=503, detail="Endpoint quản trị đang tắt (chưa cấu hình CRON_SECRET).")
+    provided = (request.headers.get("x-cron-secret") or "").strip()
+    if not hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8")):
+        raise HTTPException(status_code=401, detail="Sai hoặc thiếu X-Cron-Secret.")
 
 
 class CouncilDebateRequest(BaseModel):
@@ -201,6 +228,12 @@ def _df_to_clean_records(df: pd.DataFrame) -> list[dict]:
     if df is None or df.empty:
         return []
     df_reset = df.reset_index()
+    # Một số nguồn trả index không đặt tên "Date" (-> cột "index"/"time") gây KeyError 'Date' ở /api/ai_report
+    # và lỗi ghi cache "Timestamp is not JSON serializable" -> chuẩn hóa cột ngày đầu tiên về "Date".
+    if "Date" not in df_reset.columns and len(df_reset.columns):
+        first_col = df_reset.columns[0]
+        if pd.api.types.is_datetime64_any_dtype(df_reset[first_col]):
+            df_reset = df_reset.rename(columns={first_col: "Date"})
     if "Date" in df_reset.columns:
         df_reset["Date"] = pd.to_datetime(df_reset["Date"]).dt.strftime("%Y-%m-%d")
     num_cols = df_reset.select_dtypes(include=["number"]).columns
@@ -550,18 +583,10 @@ async def api_chat_query(req: ChatRequest, request: Request = None):
 
 # --- HỘI ĐỒNG QUÂN CƠ ĐA TÁC NHÂN PHÂN CẤP (HIERARCHICAL MULTI-AGENT COUNCIL V5.0) ---
 
-@app.post("/api/council/debate")
-async def api_council_debate(req: CouncilDebateRequest, request: Request = None):
-    """
-    Endpoint kích hoạt phiên họp Hội Đồng Quân Cơ Đa Tác Nhân (5 Persona) phân tích mã cổ phiếu.
-    Quy trình tranh biện & soát lỗi 5 giai đoạn bất đồng bộ (Asyncio Multi-Agent Debate Loop):
-    Minh Chủ Võ Lâm -> Huyết Vũ Lâu & Phong Lang Đội -> Tham Mưu Các -> Cẩm Y Vệ -> Nghị Quyết Tối Hậu.
-    """
+def _council_symbol_and_cache_key(req: "CouncilDebateRequest") -> tuple[str, str]:
     symbol = (req.symbol or "").upper().strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="Mã cổ phiếu không được để trống.")
-
-    target_date = req.target_date
     profile = {
         "horizon": req.horizon,
         "risk_profile": req.risk_profile,
@@ -569,7 +594,88 @@ async def api_council_debate(req: CouncilDebateRequest, request: Request = None)
         "position_pct": req.position_pct,
     }
     profile_key = hashlib.md5(json.dumps(profile, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:8]
-    cache_key = f"council_debate_v1_{symbol}_{target_date}_{profile_key}"
+    return symbol, f"council_debate_v1_{symbol}_{req.target_date}_{profile_key}"
+
+
+def _sse(event: str, data) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+
+
+@app.post("/api/council/debate/stream")
+async def api_council_debate_stream(req: CouncilDebateRequest, request: Request = None):
+    """
+    Phiên bản Server-Sent Events của /api/council/debate: phát sự kiện tiến độ từng chặng
+    (event: progress {stage 0..5, status running|done|fallback, label}) rồi event: result (payload đầy đủ)
+    hoặc event: error {status, detail}. Gửi comment keep-alive mỗi 15s để proxy Render không cắt kết nối.
+    """
+    symbol, cache_key = _council_symbol_and_cache_key(req)
+    headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+    if not req.force_refresh:
+        cached_result = get_cache(cache_key, 6 * 3600)
+        if cached_result:
+            async def _cached():
+                yield _sse("progress", {"stage": 5, "status": "done", "label": "Lấy biên bản từ bộ nhớ đệm", "cached": True})
+                yield _sse("result", cached_result)
+            return StreamingResponse(_cached(), media_type="text/event-stream", headers=headers)
+
+    _check_ai_rate_limit(request)
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def _on_progress(ev: dict) -> None:
+        await queue.put(("progress", ev))
+
+    async def _runner() -> None:
+        try:
+            result = await run_council_debate(
+                symbol=symbol,
+                horizon=req.horizon or "Swing (1–3 tháng)",
+                risk_profile=req.risk_profile or "Trung bình",
+                cost_basis=req.cost_basis,
+                position_pct=req.position_pct,
+                target_date=req.target_date,
+                force_refresh=bool(req.force_refresh),
+                progress_cb=_on_progress,
+            )
+            set_cache(cache_key, result)
+            await queue.put(("result", result))
+        except ValueError as ve:
+            await queue.put(("error", {"status": 404, "detail": str(ve)}))
+        except Exception as e:
+            logger.error(f"[!] Lỗi trong phiên họp Council (stream) cho {symbol}: {e}", exc_info=True)
+            await queue.put(("error", {"status": 500, "detail": "Lỗi thực thi Hội Đồng Quân Cơ. Vui lòng thử lại sau."}))
+        finally:
+            await queue.put(None)
+
+    # Phiên họp vẫn chạy tiếp (và được lưu cache) kể cả khi người dùng đóng tab giữa chừng
+    task = asyncio.create_task(_runner())
+    app.state.council_tasks = getattr(app.state, "council_tasks", set())
+    app.state.council_tasks.add(task)
+    task.add_done_callback(app.state.council_tasks.discard)
+
+    async def _events():
+        while True:
+            try:
+                item = await asyncio.wait_for(queue.get(), timeout=15)
+            except asyncio.TimeoutError:
+                yield ": keep-alive\n\n"
+                continue
+            if item is None:
+                break
+            yield _sse(*item)
+
+    return StreamingResponse(_events(), media_type="text/event-stream", headers=headers)
+
+
+@app.post("/api/council/debate")
+async def api_council_debate(req: CouncilDebateRequest, request: Request = None):
+    """
+    Endpoint kích hoạt phiên họp Hội Đồng Quân Cơ Đa Tác Nhân (5 Persona) phân tích mã cổ phiếu.
+    Quy trình tranh biện & soát lỗi 5 giai đoạn bất đồng bộ (Asyncio Multi-Agent Debate Loop):
+    Minh Chủ Võ Lâm -> Huyết Vũ Lâu & Phong Lang Đội -> Tham Mưu Các -> Cẩm Y Vệ -> Nghị Quyết Tối Hậu.
+    """
+    symbol, cache_key = _council_symbol_and_cache_key(req)
+    target_date = req.target_date
 
     if not req.force_refresh:
         cached_result = get_cache(cache_key, 6 * 3600)  # Lưu đệm 6 giờ
@@ -634,10 +740,12 @@ async def api_get_council_history(symbol: str, limit: int = 10):
 
 
 @app.post("/api/council/reset-agents")
-async def api_reset_council_agents():
+async def api_reset_council_agents(request: Request):
     """
     Khôi phục quỹ 20 Điểm Công Huân ban đầu cho toàn bộ 5 Agent (phục vụ testing & bảo trì).
+    Yêu cầu header X-Cron-Secret (dữ liệu nay lưu bền vững, không để công khai).
     """
+    _require_admin_secret(request)
     try:
         await asyncio.to_thread(reset_agents_merit)
         agents = await asyncio.to_thread(get_all_agents)
@@ -649,6 +757,36 @@ async def api_reset_council_agents():
     except Exception as e:
         logger.error(f"[!] Lỗi reset Council Agents: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Không thể reset Điểm Công Huân.")
+
+
+# --- CHẤM ĐIỂM DỰ BÁO TỰ ĐỘNG SAU PHIÊN (CRON 15H45) ---
+
+class DailyScoreRequest(BaseModel):
+    symbols: Optional[list[str]] = None
+
+
+@app.post("/api/cron/daily-score")
+async def api_cron_daily_score(request: Request, req: Optional[DailyScoreRequest] = None):
+    """
+    Chấm điểm toàn bộ khuyến nghị đã phát hành so với giá đóng cửa mới nhất.
+    Được GitHub Actions gọi lúc 15h45 (T2–T6). Yêu cầu header X-Cron-Secret.
+    """
+    _require_admin_secret(request)
+    symbols = req.symbols if req else None
+    summary = await asyncio.to_thread(run_daily_scoring, symbols)
+    return summary
+
+
+@app.get("/api/forecast/scores")
+async def api_forecast_scores(symbol: Optional[str] = None, limit: int = 50):
+    """Lịch sử chấm điểm dự báo (mới nhất trước), lọc theo mã nếu có."""
+    limit = max(1, min(int(limit), 500))
+    try:
+        rows = await asyncio.to_thread(get_forecast_scores, symbol, limit)
+        return {"symbol": symbol.upper() if symbol else None, "count": len(rows), "scores": rows}
+    except Exception as e:
+        logger.error(f"[!] Lỗi truy vấn forecast_scores: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Không thể truy vấn lịch sử chấm điểm.")
 
 
 # --- PHỤC VỤ GIAO DIỆN WEB REACT TÍCH HỢP (ALL-IN-ONE CLOUD WORKSTATION) ---

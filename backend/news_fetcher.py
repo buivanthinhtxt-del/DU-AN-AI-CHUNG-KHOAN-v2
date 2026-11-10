@@ -1,6 +1,9 @@
 import re
 import html
+import urllib.parse
 import concurrent.futures
+from email.utils import parsedate_to_datetime
+
 import requests
 import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import ParseError
@@ -12,6 +15,12 @@ RSS_URLS = [
     ("VnExpress Kinh doanh", "https://vnexpress.net/rss/kinh-doanh.rss"),
 ]
 
+# Tìm kiếm tin RIÊNG theo mã (Google News RSS gom bài từ CafeF, VnEconomy, Vietstock, NDH...)
+TICKER_NEWS_URL = "https://news.google.com/rss/search?q={query}&hl=vi&gl=VN&ceid=VN:vi"
+TICKER_NEWS_WINDOW = "30d"
+
+_HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+
 
 def _clean_html(raw_text: str) -> str:
     """Loại bỏ thẻ HTML và giải mã HTML entities trong RSS description."""
@@ -22,12 +31,18 @@ def _clean_html(raw_text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _pub_ts(pub_date: str) -> float:
+    try:
+        return parsedate_to_datetime(pub_date).timestamp()
+    except Exception:
+        return 0.0
+
+
 def _fetch_single_rss(source_name: str, url: str) -> list[dict]:
     """Tải và phân tích toàn bộ danh sách item từ 1 nguồn RSS."""
     items = []
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        resp = requests.get(url, headers=headers, timeout=8)
+        resp = requests.get(url, headers=_HEADERS, timeout=8)
         if resp.status_code == 200:
             root = ET.fromstring(resp.content)
             for item in root.findall(".//item"):
@@ -54,89 +69,109 @@ def _fetch_single_rss(source_name: str, url: str) -> list[dict]:
     return items
 
 
-def get_latest_news(symbol: str = None) -> list[str]:
+def _fetch_ticker_news(symbol: str) -> list[dict]:
     """
-    Lấy tin tức mới nhất từ các trang báo tài chính chính thống (CafeF, VnExpress).
-    Duyệt toàn bộ các bản tin trong RSS để tìm tin khớp với mã cổ phiếu trước khi giới hạn số lượng.
+    Tin tức chuyên biệt theo mã cổ phiếu (ticker-specific).
+    Google News trả về tiêu đề dạng "<tiêu đề> - <tên báo>", tên báo nằm trong thẻ <source>.
+    Phần description chỉ là liên kết HTML nên bỏ qua (summary rỗng).
     """
-    print(f"[*] Đang tổng hợp bản tin tài chính mới nhất cho {symbol or 'Thị trường chung'}...")
-
-    all_articles = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        futures = [executor.submit(_fetch_single_rss, name, url) for name, url in RSS_URLS]
-        for future in concurrent.futures.as_completed(futures, timeout=12):
-            try:
-                all_articles.extend(future.result())
-            except Exception:
+    query = urllib.parse.quote(f'"{symbol}" cổ phiếu when:{TICKER_NEWS_WINDOW}')
+    url = TICKER_NEWS_URL.format(query=query)
+    items = []
+    try:
+        resp = requests.get(url, headers=_HEADERS, timeout=8)
+        if resp.status_code != 200:
+            return []
+        root = ET.fromstring(resp.content)
+        for item in root.findall(".//item"):
+            title = _clean_html(item.findtext("title") or "")
+            publisher = _clean_html(item.findtext("source") or "") or "Google News"
+            suffix = f" - {publisher}"
+            if title.endswith(suffix):
+                title = title[: -len(suffix)].strip()
+            if not title:
                 continue
+            items.append({
+                "title": title,
+                "summary": "",
+                "source": publisher,
+                "pub_date": (item.findtext("pubDate") or "").strip(),
+                "url": (item.findtext("link") or "").strip(),
+                "ticker_specific": True,
+            })
+    except (requests.RequestException, ParseError) as e:
+        print(f"[!] Lỗi tải tin riêng theo mã {symbol}: {e}")
+    return items
 
-    matched_news = []
-    general_news = []
-    seen_titles = set()
 
+def _collect_news(symbol: str = None) -> tuple[list[dict], list[dict]]:
+    """
+    Trả về (tin riêng của mã, tin thị trường chung).
+    - Tin riêng = tin Google News theo mã + tin RSS chung có nhắc đến mã, sắp xếp mới nhất trước.
+    - Chỉ giữ tin có mã xuất hiện trong tiêu đề/tóm tắt để tránh nhiễu (vd: "FPT" trong tin không liên quan).
+    """
     clean_sym = symbol.upper().strip().replace(".VN", "") if symbol else None
     sym_pattern = re.compile(rf"\b{re.escape(clean_sym)}\b", re.IGNORECASE) if clean_sym else None
 
-    for art in all_articles:
-        title = art["title"]
-        if title in seen_titles:
-            continue
-        seen_titles.add(title)
+    all_articles: list[dict] = []
+    ticker_articles: list[dict] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(_fetch_single_rss, name, url): "rss" for name, url in RSS_URLS}
+        if clean_sym:
+            futures[executor.submit(_fetch_ticker_news, clean_sym)] = "ticker"
+        try:
+            for future in concurrent.futures.as_completed(futures, timeout=12):
+                try:
+                    res = future.result()
+                except Exception:
+                    continue
+                (ticker_articles if futures[future] == "ticker" else all_articles).extend(res)
+        except concurrent.futures.TimeoutError:
+            pass
 
-        summary = art["summary"]
-        source = art["source"]
-        formatted = f"- {title} (Nguồn: {source})"
+    matched: list[dict] = []
+    general: list[dict] = []
+    seen: set[str] = set()
 
-        if sym_pattern and (sym_pattern.search(title) or sym_pattern.search(summary)):
-            matched_news.append(formatted)
-        else:
-            general_news.append(formatted)
+    def _key(title: str) -> str:
+        return re.sub(r"\W+", "", title.lower())[:80]
 
-    if clean_sym and matched_news:
-        # Ưu tiên tin riêng của mã cổ phiếu, bổ sung thêm tin vĩ mô thị trường cho đủ bức tranh
-        combined = matched_news[:7] + general_news[:3]
-        return combined[:10]
-
-    return general_news[:10]
-
-
-def get_latest_news_detailed(symbol: str = None) -> list[dict]:
-    """
-    Lấy danh sách tin tức chi tiết gồm: title, summary, source, pub_date, url
-    để hỗ trợ hiển thị citation / liên kết đọc bài gốc.
-    """
-    all_articles = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        futures = [executor.submit(_fetch_single_rss, name, url) for name, url in RSS_URLS]
-        for future in concurrent.futures.as_completed(futures, timeout=12):
-            try:
-                all_articles.extend(future.result())
-            except Exception:
-                continue
-
-    matched = []
-    general = []
-    seen = set()
-
-    clean_sym = symbol.upper().strip().replace(".VN", "") if symbol else None
-    sym_pattern = re.compile(rf"\b{re.escape(clean_sym)}\b", re.IGNORECASE) if clean_sym else None
-
-    for art in all_articles:
+    for art in ticker_articles + all_articles:
         title = art.get("title", "")
-        if not title or title in seen:
+        k = _key(title)
+        if not title or k in seen:
             continue
-        seen.add(title)
-
-        summary = art.get("summary", "")
-        if sym_pattern and (sym_pattern.search(title) or sym_pattern.search(summary)):
+        seen.add(k)
+        if sym_pattern and (sym_pattern.search(title) or sym_pattern.search(art.get("summary", ""))):
             matched.append(art)
         else:
             general.append(art)
 
-    if clean_sym and matched:
-        combined = matched[:7] + general[:3]
-        return combined[:10]
+    matched.sort(key=lambda a: _pub_ts(a.get("pub_date", "")), reverse=True)
+    return matched, general
 
+
+def get_latest_news(symbol: str = None) -> list[str]:
+    """
+    Lấy tin tức mới nhất: ưu tiên tin riêng theo mã (Google News + RSS CafeF/VnExpress có nhắc mã),
+    bổ sung tin vĩ mô thị trường cho đủ bức tranh.
+    """
+    print(f"[*] Đang tổng hợp bản tin tài chính mới nhất cho {symbol or 'Thị trường chung'}...")
+    matched, general = _collect_news(symbol)
+    fmt = lambda a: f"- {a['title']} (Nguồn: {a['source']})"  # noqa: E731
+    if symbol and matched:
+        return [fmt(a) for a in (matched[:7] + general[:3])][:10]
+    return [fmt(a) for a in general[:10]]
+
+
+def get_latest_news_detailed(symbol: str = None) -> list[dict]:
+    """
+    Lấy danh sách tin tức chi tiết gồm: title, summary, source, pub_date, url (+ ticker_specific)
+    để hỗ trợ hiển thị citation / liên kết đọc bài gốc.
+    """
+    matched, general = _collect_news(symbol)
+    if symbol and matched:
+        return (matched[:7] + general[:3])[:10]
     return general[:10]
 
 

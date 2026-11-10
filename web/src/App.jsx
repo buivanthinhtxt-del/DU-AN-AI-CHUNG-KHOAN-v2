@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Play,
   Zap,
@@ -24,7 +24,7 @@ import {
   fetchMarketDataApi,
   fetchAiReportApi,
   fetchRealtimeQuoteApi,
-  fetchCouncilDebate,
+  fetchCouncilDebateStream,
   fetchCouncilAgents,
   getWatchlist,
   addToWatchlistApi,
@@ -443,6 +443,8 @@ function App() {
   const [loadingMarket, setLoadingMarket] = useState(false);
   const [loadingAI, setLoadingAI] = useState(false);
   const [loadingCouncil, setLoadingCouncil] = useState(false);
+  const [councilProgress, setCouncilProgress] = useState({});
+  const councilRequestRef = useRef(0);
   const [data, setData] = useState(null);
   const [aiReport, setAiReport] = useState(INITIAL_FALLBACK_REPORT);
   const [councilDebate, setCouncilDebate] = useState(INITIAL_COUNCIL_DEBATE);
@@ -520,15 +522,33 @@ function App() {
         });
 
       // LUỒNG 4 (Quân cơ): Hội Đồng Đa Tác Nhân Phân Cấp (5 Persona Asyncio Debate & Critique Loop)
+      // Mỗi lần triệu tập mang 1 mã yêu cầu; bỏ qua sự kiện của phiên cũ nếu người dùng đổi mã giữa chừng
+      const councilReqId = ++councilRequestRef.current;
+      const isCurrentCouncil = () => councilRequestRef.current === councilReqId;
       setLoadingCouncil(true);
-      fetchCouncilDebate(cleanSym, basePayload)
+      setCouncilProgress({ startedAt: Date.now(), stages: {} });
+      fetchCouncilDebateStream(cleanSym, basePayload, (ev) => {
+        if (!isCurrentCouncil()) return;
+        setCouncilProgress((prev) => ({
+          ...prev,
+          engine: ev.engine || prev.engine,
+          message: ev.message || prev.message,
+          stages: { ...(prev.stages || {}), [ev.stage]: ev.status },
+        }));
+      })
         .then((councilData) => {
+          if (!isCurrentCouncil()) return;
           if (councilData) {
             setCouncilDebate(councilData);
           }
           setLoadingCouncil(false);
+          // Án phạt của Cẩm Y Vệ có thể đã thay đổi Điểm Công Huân -> tải lại bảng
+          fetchCouncilAgents()
+            .then((res) => res?.agents && setCouncilAgents(res.agents))
+            .catch(() => {});
         })
         .catch((err) => {
+          if (!isCurrentCouncil()) return;
           console.warn('[Council] Dùng dữ liệu fallback:', err);
           setLoadingCouncil(false);
         });
@@ -1241,6 +1261,7 @@ function App() {
               <CouncilDebate
                 debate={councilDebate}
                 loading={loadingCouncil}
+                progress={councilProgress}
                 symbol={symbol}
                 onRefresh={() => triggerParallelStreams(symbol)}
               />

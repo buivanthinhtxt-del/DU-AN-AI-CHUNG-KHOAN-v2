@@ -5,7 +5,7 @@ import concurrent.futures
 import warnings
 
 try:
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 

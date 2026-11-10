@@ -262,3 +262,37 @@ cron-job.org cung cấp dịch vụ cron job web hoàn toàn miễn phí, cho ph
 ---
 
 *Tài liệu được phát triển và kiểm toán chất lượng bởi Antigravity AI Engineering Team.*
+
+---
+
+## 7. LƯU TRỮ BỀN VỮNG (NEON POSTGRES) & CHẤM ĐIỂM TỰ ĐỘNG SAU PHIÊN
+
+Render Free xóa ổ đĩa mỗi khi container ngủ/khởi động lại. Khi **không** có `DATABASE_URL`, Điểm Công Huân,
+biên bản Quân Cơ, lịch sử dự báo và watchlist sẽ mất. Kiểm tra nhanh: `GET /api/health` → trường
+`storage.backend` phải là `postgres` và `persistent: true`.
+
+### Bước 1: Tạo database Neon miễn phí
+1. Đăng ký https://neon.tech → **Create project** (region gần nhất: *AWS Asia Pacific (Singapore)*).
+2. Vào **Connection Details** → chọn **Pooled connection** → copy chuỗi dạng
+   `postgresql://<user>:<password>@<host>-pooler.<region>.aws.neon.tech/neondb?sslmode=require`.
+
+### Bước 2: Khai báo biến môi trường trên Render (Settings → Environment)
+| Biến | Giá trị |
+| :--- | :--- |
+| `DATABASE_URL` | Chuỗi kết nối Neon ở Bước 1 |
+| `CRON_SECRET` | Một chuỗi ngẫu nhiên dài (vd: `python -c "import secrets;print(secrets.token_urlsafe(32))"`) |
+
+Các bảng (`agent_merit_profiles`, `agent_penalties`, `council_sessions`, `forecast_records`, `forecast_scores`,
+`watchlist`) được tạo tự động ở lần khởi động đầu tiên. `CRON_SECRET` đồng thời bảo vệ
+`POST /api/council/reset-agents` (không còn mở công khai).
+
+### Bước 3: Bật lịch chấm điểm 15h45 (GitHub Actions)
+Workflow `.github/workflows/daily-score.yml` chạy 08:45 UTC (15:45 giờ VN), Thứ Hai – Thứ Sáu:
+đánh thức service qua `/api/health`, rồi gọi `POST /api/cron/daily-score`.
+Trong repo GitHub mà workflow nằm: **Settings → Secrets and variables → Actions → New repository secret**:
+- `APP_BASE_URL` = `https://<tên-service>.onrender.com` (không có `/` ở cuối)
+- `CRON_SECRET` = trùng giá trị trên Render
+
+Chạy thử ngay: tab **Actions → Daily forecast scoring → Run workflow**. Xem kết quả: `GET /api/forecast/scores?symbol=HPG`.
+
+> Máy chủ chạy liên tục (không ngủ) có thể dùng lịch nội bộ thay GitHub Actions: đặt `ENABLE_INPROCESS_CRON=1`.

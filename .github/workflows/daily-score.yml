@@ -1,0 +1,39 @@
+# Chấm điểm dự báo tự động sau phiên — 15h45 giờ Việt Nam (08:45 UTC), Thứ Hai – Thứ Sáu.
+# Cần khai báo 2 GitHub Secrets trong repo:
+#   APP_BASE_URL  — vd: https://nghiep-vu-ai-workstation.onrender.com  (không có dấu / ở cuối)
+#   CRON_SECRET   — trùng với biến môi trường CRON_SECRET trên Render
+# Lưu ý: GitHub có thể trễ lịch vài phút đến vài chục phút vào giờ cao điểm.
+name: Daily forecast scoring
+
+on:
+  schedule:
+    - cron: "45 8 * * 1-5"
+  workflow_dispatch: {}
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Wake up Render service (cold start)
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+        run: |
+          test -n "$APP_BASE_URL" || { echo "::error::Thiếu secret APP_BASE_URL"; exit 1; }
+          for i in $(seq 1 20); do
+            if curl -fsS --max-time 30 "$APP_BASE_URL/api/health"; then echo; exit 0; fi
+            echo "Chưa sẵn sàng, thử lại sau 15s ($i/20)..."; sleep 15
+          done
+          echo "::error::Service không phản hồi /api/health"; exit 1
+
+      - name: Run daily scoring
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          code=$(curl -sS -o result.json -w "%{http_code}" --max-time 900 \
+            -X POST "$APP_BASE_URL/api/cron/daily-score" \
+            -H "X-Cron-Secret: $CRON_SECRET" -H "Content-Type: application/json" -d '{}')
+          echo "HTTP $code"
+          python3 -c "import json;d=json.load(open('result.json'));print('Tổng mã:',d.get('total_symbols'),'| Kết quả:',d.get('counts'),'| Độ chính xác TB:',d.get('avg_accuracy_pct'))" || cat result.json
+          test "$code" = "200"

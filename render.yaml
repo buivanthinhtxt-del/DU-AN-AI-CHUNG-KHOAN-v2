@@ -7,6 +7,12 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
+      # Postgres bền vững (vd: Neon free) — thiếu biến này dữ liệu sẽ mất khi container ngủ
+      - key: DATABASE_URL
+        sync: false
+      # Bảo vệ /api/cron/daily-score và /api/council/reset-agents (dùng chung với GitHub Actions)
+      - key: CRON_SECRET
+        sync: false
       - key: AI_RATE_LIMIT_PER_HOUR
         value: "25"
       - key: PYTHONUTF8
