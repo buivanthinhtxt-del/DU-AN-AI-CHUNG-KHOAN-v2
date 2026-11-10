@@ -767,7 +767,7 @@ def _rule_based_report(ctx: dict, reason: str) -> dict:
             "| H1: Gom hàng & Hấp thụ | Tạo lập gom ngầm vùng hỗ trợ | `[Tính toán]` | 40% | Vol cạn kiệt, giữ nền |\n"
             "| H2: Phân phối & Neo giá xả ngầm | Neo giá xanh nhẹ dụ cầu | `[Suy luận]` | 15% | Vol lớn nến cụt đầu |\n"
             "| H3: Quỹ tái cơ cấu (ETF/NAV) | Tác động review quỹ ngoại/nội | `[Giả định]` | 10% | Khớp lệnh ATC đột biến |\n"
-            "| H4: Luân chuyển Ngành tự nhiên | Dòng tiền xoay vòng ngành | `[Nguồn]` | 15% | Cả ngành đồng loạt bứt phá |\n"
+            "| H4: Luân chuyển Ngành tự nhiên | Dòng tiền xoay vòng ngành | `[Suy luận]` | 15% | Cả ngành đồng loạt bứt phá |\n"
             "| H5: Tái định giá Căn bản (Re-rating) | KQKD quý tăng trưởng đột biến | `[Suy luận]` | 15% | Lợi nhuận ròng tăng > 20% |\n"
             "| H6: Bán tháo Kỹ thuật / Call Margin | Lực bán giải chấp chéo | `[Chưa xác định]` | 5% | Lệnh bán MP sàn áp đảo |"
         )
@@ -787,7 +787,7 @@ def _rule_based_report(ctx: dict, reason: str) -> dict:
 *Bản trình Hội đồng Đầu tư Định chế × Tác chiến T+2,5 (Version 5.0) · Dữ liệu đến: {q['last_date']} · Đơn vị giá: {q['price_unit']} · Hồ sơ: {prof['horizon']}, rủi ro {prof['risk_profile']}*
 
 ### 🎯 KẾT LUẬN & QUYẾT NGHỊ CỦA HỘI ĐỒNG (BLUF)
-- **Quyết định:** {action} `[Suy luận]` — **Độ tin cậy:** {"Thấp" if not dq['has_fundamentals'] else "Trung bình"} (chưa có đánh giá cơ bản) — **Định danh bàn cờ Tạo lập:** {arch_name} `[Nguồn]`
+- **Quyết định:** {action} `[Suy luận]` — **Độ tin cậy:** {"Thấp" if not dq['has_fundamentals'] else "Trung bình"} (chưa có đánh giá cơ bản) — **Định danh bàn cờ Tạo lập:** {arch_name} `[Suy luận]`
 - **Luận điểm cốt lõi:** {t['label']}; {fl['flow_verdict'].lower()}; R:R kế hoạch 1:{_vn(rr)} `[Tính toán]`
 - **Chỉ thị người CHƯA có vị thế:** {bp['setup_type']}. Vùng mua {_vn(bp['entry_low'])}–{_vn(bp['entry_high'])}; {bp['entry_trigger']} `[Tính toán]`
 - **Chỉ thị người ĐANG nắm giữ:** giữ khi giá còn trên {price_stop_val}; thủng mức này → hạ tỷ trọng dứt khoát `[Tính toán]`
@@ -799,18 +799,18 @@ def _rule_based_report(ctx: dict, reason: str) -> dict:
 {audit_table}
 
 ### 2. Định danh Bản chất Cổ phiếu & Thời tiết Thị trường (Tránh bẫy "Xanh vỏ đỏ lòng")
-- **Định danh Tạo lập:** {arch_name} — {arch_rule} `[Nguồn]`
+- **Định danh Tạo lập:** {arch_name} — {arch_rule} `[Suy luận]`
 - **Thời tiết thị trường:** VN-Index {(mk['trend']['label'] + f"; {mk['distribution_days_25']} ngày phân phối trong 25 phiên; 1 tháng {_vn(mk['ret_20d'], sign=True)}%") if mk else 'chưa có dữ liệu'}.
 - **Trạng thái:** {mk['status'] if mk else 'N/A'} → tỷ trọng cổ phiếu tổng thể tham khảo **{mk['equity_allocation'] if mk else 'N/A'}**. {mk.get('breadth_hint', '') if mk else ''}
 - Beta của {sym} so với VN-Index (120 phiên): {_vn(rs.get('beta_120d'))} → {'biến động mạnh hơn thị trường' if (rs.get('beta_120d') or 0) > 1.1 else 'biến động ít hơn hoặc tương đương thị trường'}.
 - **Đối chiếu 3 Giả thuyết Thay thế Không-Thao-túng:**
   1. *Quỹ tái cơ cấu (Fund Rebalance):* Rà soát danh mục ETF ngoại/nội định kỳ `[Giả định]`.
-  2. *Luân chuyển dòng tiền ngành (Sector Rotation):* {(f"Xếp hạng ngành {rk['rank']}/{rk['of']}" if rk else "Theo dõi dòng tiền nhóm ngành")} `[Nguồn]`.
+  2. *Luân chuyển dòng tiền ngành (Sector Rotation):* {(f"Xếp hạng ngành {rk['rank']}/{rk['of']}" if rk else "Theo dõi dòng tiền nhóm ngành")} `[Tính toán]`.
   3. *Tái định giá theo nội tại (Fundamental Re-rating):* Cần AI đọc BCTC để xác nhận `[Chưa xác định]`.
 
 ### 3. Đọc Bảng điện, Sổ lệnh & Dòng tiền ẩn (Tape Reading & Đọc vị Tạo lập)
-- **Độ sâu thị trường & Tường đỡ:** {t6.get('order_book_analysis') or 'Đang theo dõi lệnh kê 3 bước giá.'} `[Nguồn]`
-- **Bất đối xứng Khối ngoại:** {t6.get('foreign_cycle_analysis') or foreign} `[Nguồn]`
+- **Độ sâu thị trường & Tường đỡ:** {t6.get('order_book_analysis') or 'Đang theo dõi lệnh kê 3 bước giá.'} `[Tính toán]`
+- **Bất đối xứng Khối ngoại:** {t6.get('foreign_cycle_analysis') or foreign} `[Tính toán]`
 - **Phân biệt Spring vs. Gãy thật:** {t6.get('spring_analysis') or 'Chưa ghi nhận cú rũ bỏ Spring rõ rệt.'} `[Suy luận]`
 - **Phân tích phiên ATC & CLV:** Chỉ số Close Location Value CLV = {clv_val} → Đánh giá ATC: **{atc_eval}**{exp_warn}. `[Tính toán]`
 

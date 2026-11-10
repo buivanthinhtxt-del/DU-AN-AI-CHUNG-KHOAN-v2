@@ -29,13 +29,13 @@ Hệ thống phân tích chứng khoán chuyên sâu và dự báo thông minh t
   - Tự động kích hoạt cơ chế failover đa model (`gemini-2.5-flash`, `gemini-1.5-flash`...).
   - Hậu kiểm nhất quán nghiêm ngặt: Tỷ lệ R:R ≥ 1.5, mức cắt lỗ dựa trên 1.5×ATR, kiểm tra trần chất lượng dữ liệu.
   - Chế độ phân tích định lượng dự phòng (Fallback) khi không có kết nối internet hoặc hết quota AI.
-- **Chuỗi Nguồn Dữ Liệu Giá Dự Phòng 4 Lớp**:
+- **Chuỗi Nguồn Dữ Liệu Giá Dự Phòng Đa Tầng (Zero-Dependency)**:
   - `ssi`: API FastConnect chính thức của SSI.
-  - `public`: Xoay vòng cầu dao tự động qua các API bảng giá web công khai (DNSE, VNDirect, Vietcap, KBSV).
-  - `vnstock`: Tích hợp thư viện dữ liệu vnstock.
-  - `local store`: Kho dữ liệu nến CSV cục bộ tự động đồng bộ (`backend/data/ohlcv/`), duy trì hoạt động khi mất kết nối.
+  - `public`: Xoay vòng cầu dao tự động qua các API bảng giá web công khai (DNSE, VNDirect, Vietcap, KBSV) — hoạt động độc lập, không phụ thuộc thư viện bên ngoài.
+  - `local store`: Kho dữ liệu nến CSV cục bộ tự động đồng bộ (`backend/data/ohlcv/`), duy trì hoạt động ổn định ngay cả khi offline.
+  - *(Tùy chọn mở rộng: Module kế thừa vnstock được bọc lớp fallback an toàn, không bắt buộc cài đặt)*.
 - **Vĩ mô & Tin tức Thời gian thực**: Tự động tổng hợp giá Vàng thế giới, Dầu Brent, Tỷ giá USD/VND và luồng tin tức RSS tài chính (CafeF, VnExpress).
-- **Giao diện Trực quan & Tương tác Cao**: Xây dựng trên React 19, biểu đồ tài chính TradingView `lightweight-charts`, biểu đồ Radar đa chiều, danh mục theo dõi (Watchlist) lưu trữ SQLite cục bộ.
+- **Giao diện Trực quan & Tương tác Cao**: Xây dựng trên React 19 + Modern Native CSS, biểu đồ tài chính TradingView `lightweight-charts`, biểu đồ Radar đa chiều, danh mục theo dõi (Watchlist) lưu trữ SQLite cục bộ. Trang demo vi cấu trúc (`fiintrade_demo.html`) cung cấp trực quan hóa kịch bản tác chiến (lưu ý: phân tầng Shark Tracker tại đây là mô phỏng ý tưởng thiết kế khi chưa có luồng Tick Data L2/L3).
 
 ---
 
@@ -146,8 +146,8 @@ Tài liệu bao gồm:
 | `AI_RATE_LIMIT_PER_HOUR` | Không | `25` | Giới hạn số lượt phân tích AI chuyên sâu của mỗi địa chỉ IP trong 1 giờ. |
 | `PYTHONUTF8` | Không | `1` | Ép kiểu mã hóa UTF-8 cho Python trên mọi môi trường. |
 | `GEMINI_MODELS` | Không | `gemini-2.5-flash,gemini-1.5-flash` | Danh sách model ưu tiên tự động failover khi gặp lỗi 429. |
-| `DATA_SOURCES` | Không | `ssi,public,vnstock,local` | Thứ tự ưu tiên của chuỗi nguồn dữ liệu giá. |
-| `DISABLE_VNSTOCK` | Không | `0` | Đặt thành `1` để bỏ qua vnstock và dùng nguồn public/ssi. |
+| `DATA_SOURCES` | Không | `ssi,public,local` | Thứ tự ưu tiên của chuỗi nguồn dữ liệu giá (mặc định zero-dependency). |
+| `DISABLE_VNSTOCK` | Không | `1` | Đặt thành `1` (mặc định) để hệ thống chạy độc lập qua public web / SSI / local store. |
 
 ---
 
@@ -167,7 +167,7 @@ Tài liệu bao gồm:
 │   ├── ai_analyzer.py          # Module phân tích kết hợp Gemini AI
 │   ├── quant_engine.py         # Module định lượng 6 bước độc lập
 │   ├── data_fetcher.py         # Bộ tải dữ liệu giá cổ phiếu
-│   ├── data_sources.py         # Quản lý xoay vòng đa nguồn (SSI, Public, vnstock)
+│   ├── data_sources.py         # Quản lý xoay vòng đa nguồn (SSI, Public web APIs, Local store)
 │   ├── macro_fetcher.py        # Bộ tải chỉ số kinh tế vĩ mô quốc tế
 │   ├── news_fetcher.py         # Quét tin tức RSS CafeF & VnExpress
 │   ├── cache_manager.py        # Quản lý bộ đệm file JSON

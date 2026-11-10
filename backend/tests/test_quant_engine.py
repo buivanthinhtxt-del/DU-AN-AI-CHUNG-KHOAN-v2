@@ -126,7 +126,7 @@ def test_tactical_6step_and_prompt_loading():
     pt = t6["profit_taking_3tier"]
     assert "tier1_sell_30pct" in pt and "tier2_hold_50pct_trailing" in pt and "tier3_hold_20pct_fomo" in pt
     assert len(t6["checklist_5m"]) == 5
-    assert "TƯỜNG ĐỠ TỔ CHỨC" in t6["order_book_analysis"]
+    assert "ĐỘ SÂU SỔ LỆNH TỨC THỜI" in t6["order_book_analysis"]
     assert "KHỐI NGOẠI" in t6["foreign_cycle_analysis"]
 
     # Kiểm tra nạp Master Prompt 4.0 không bị rỗng

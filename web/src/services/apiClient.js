@@ -103,4 +103,32 @@ export async function sendChatQueryApi(message, history = [], symbol = null) {
   return res.json();
 }
 
+export async function fetchCouncilDebate(symbolOrPayload, params = {}) {
+  const payload =
+    typeof symbolOrPayload === 'string'
+      ? { symbol: symbolOrPayload, ...params }
+      : { ...symbolOrPayload, ...params };
+
+  const res = await fetch(`${API_BASE_URL}/api/council/debate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Lỗi phiên họp Hội Đồng Quân Cơ hoặc máy chủ bận.');
+  }
+  return res.json();
+}
+
+export async function fetchCouncilAgents() {
+  const res = await fetch(`${API_BASE_URL}/api/council/agents`);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Không thể tải thông tin Điểm Công Huân của các Agent.');
+  }
+  return res.json();
+}
+
+
 

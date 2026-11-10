@@ -14,6 +14,8 @@ BASE_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BASE_DIR.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 try:
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
@@ -52,6 +54,25 @@ from macro_fetcher import get_macro_data
 from cache_manager import get_cache, set_cache
 from database import init_db, get_watchlist, add_watchlist, remove_watchlist
 from chat_engine import query_gemini_chat
+
+try:
+    from backend.agents.audit_store import (
+        init_audit_db,
+        get_all_agents,
+        get_recent_penalties,
+        get_council_history,
+        reset_agents_merit,
+    )
+    from backend.agents.council_engine import run_council_debate
+except ImportError:
+    from agents.audit_store import (
+        init_audit_db,
+        get_all_agents,
+        get_recent_penalties,
+        get_council_history,
+        reset_agents_merit,
+    )
+    from agents.council_engine import run_council_debate
 
 # === FIX: Đường dẫn chứng chỉ SSL trên Windows có ký tự Unicode ===
 try:
@@ -137,6 +158,17 @@ app.add_middleware(
 async def startup_event():
     # Khởi tạo database non-blocking
     await asyncio.to_thread(init_db)
+    await asyncio.to_thread(init_audit_db)
+
+
+class CouncilDebateRequest(BaseModel):
+    symbol: str
+    target_date: Optional[str] = None
+    force_refresh: Optional[bool] = False
+    horizon: Optional[str] = "Swing (1–3 tháng)"
+    risk_profile: Optional[str] = "Trung bình"
+    cost_basis: Optional[float] = None
+    position_pct: Optional[float] = None
 
 
 class AnalyzeRequest(BaseModel):
@@ -514,6 +546,109 @@ async def api_chat_query(req: ChatRequest, request: Request = None):
     except Exception as e:
         logger.error(f"[!] Lỗi api_chat_query: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Không thể hoàn thành tra cứu AI vào lúc này.")
+
+
+# --- HỘI ĐỒNG QUÂN CƠ ĐA TÁC NHÂN PHÂN CẤP (HIERARCHICAL MULTI-AGENT COUNCIL V5.0) ---
+
+@app.post("/api/council/debate")
+async def api_council_debate(req: CouncilDebateRequest, request: Request = None):
+    """
+    Endpoint kích hoạt phiên họp Hội Đồng Quân Cơ Đa Tác Nhân (5 Persona) phân tích mã cổ phiếu.
+    Quy trình tranh biện & soát lỗi 5 giai đoạn bất đồng bộ (Asyncio Multi-Agent Debate Loop):
+    Minh Chủ Võ Lâm -> Huyết Vũ Lâu & Phong Lang Đội -> Tham Mưu Các -> Cẩm Y Vệ -> Nghị Quyết Tối Hậu.
+    """
+    symbol = (req.symbol or "").upper().strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Mã cổ phiếu không được để trống.")
+
+    target_date = req.target_date
+    profile = {
+        "horizon": req.horizon,
+        "risk_profile": req.risk_profile,
+        "cost_basis": req.cost_basis,
+        "position_pct": req.position_pct,
+    }
+    profile_key = hashlib.md5(json.dumps(profile, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:8]
+    cache_key = f"council_debate_v1_{symbol}_{target_date}_{profile_key}"
+
+    if not req.force_refresh:
+        cached_result = get_cache(cache_key, 6 * 3600)  # Lưu đệm 6 giờ
+        if cached_result:
+            return cached_result
+
+    # Kiểm tra giới hạn tần suất gọi AI theo IP
+    _check_ai_rate_limit(request)
+
+    try:
+        result = await run_council_debate(
+            symbol=symbol,
+            horizon=req.horizon or "Swing (1–3 tháng)",
+            risk_profile=req.risk_profile or "Trung bình",
+            cost_basis=req.cost_basis,
+            position_pct=req.position_pct,
+            target_date=target_date,
+            force_refresh=bool(req.force_refresh),
+        )
+
+        # Lưu cache cho các phiên họp thành công
+        set_cache(cache_key, result)
+        return result
+
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[!] Lỗi trong phiên họp Council cho {symbol}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Lỗi thực thi Hội Đồng Quân Cơ. Vui lòng thử lại sau.")
+
+
+@app.get("/api/council/agents")
+async def api_get_council_agents():
+    """
+    Lấy danh sách 5 Agent, Điểm Công Huân hiện thời, cấp cảnh báo, thế hệ và các án phạt gần nhất.
+    """
+    try:
+        agents = await asyncio.to_thread(get_all_agents)
+        penalties = await asyncio.to_thread(get_recent_penalties, 20)
+        return {"agents": agents, "recent_penalties": penalties}
+    except Exception as e:
+        logger.error(f"[!] Lỗi đọc danh sách Council Agents: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Không thể đọc thông tin Agent Council.")
+
+
+@app.get("/api/council/history/{symbol}")
+async def api_get_council_history(symbol: str, limit: int = 10):
+    """
+    Lấy lịch sử các phiên họp Quân Cơ Các của một mã cổ phiếu cụ thể.
+    """
+    sym = (symbol or "").upper().strip()
+    if not sym:
+        raise HTTPException(status_code=400, detail="Mã cổ phiếu không hợp lệ.")
+    try:
+        sessions = await asyncio.to_thread(get_council_history, sym, limit)
+        return {"symbol": sym, "sessions": sessions}
+    except Exception as e:
+        logger.error(f"[!] Lỗi đọc lịch sử Council cho {sym}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Không thể tải lịch sử phiên họp.")
+
+
+@app.post("/api/council/reset-agents")
+async def api_reset_council_agents():
+    """
+    Khôi phục quỹ 20 Điểm Công Huân ban đầu cho toàn bộ 5 Agent (phục vụ testing & bảo trì).
+    """
+    try:
+        await asyncio.to_thread(reset_agents_merit)
+        agents = await asyncio.to_thread(get_all_agents)
+        return {
+            "status": "success",
+            "message": "Đã khôi phục 20 Điểm Công Huân cho toàn bộ 5 Agent.",
+            "agents": agents,
+        }
+    except Exception as e:
+        logger.error(f"[!] Lỗi reset Council Agents: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Không thể reset Điểm Công Huân.")
 
 
 # --- PHỤC VỤ GIAO DIỆN WEB REACT TÍCH HỢP (ALL-IN-ONE CLOUD WORKSTATION) ---

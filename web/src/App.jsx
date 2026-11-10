@@ -16,11 +16,16 @@ import AnalysisReport from './components/AnalysisReport';
 import AIChatBox from './components/AIChatBox';
 import InvestmentThesis from './components/InvestmentThesis';
 import LiveQuote from './components/LiveQuote';
+import ExecutiveSummaryBanner from './components/ExecutiveSummaryBanner';
+import AgentMeritBoard from './components/AgentMeritBoard';
+import CouncilDebate from './components/CouncilDebate';
 
 import {
   fetchMarketDataApi,
   fetchAiReportApi,
   fetchRealtimeQuoteApi,
+  fetchCouncilDebate,
+  fetchCouncilAgents,
   getWatchlist,
   addToWatchlistApi,
   removeFromWatchlistApi,
@@ -43,12 +48,120 @@ const DEFAULT_WATCHLIST = [
   { symbol: 'OIL', name: 'Tổng Công ty Dầu Việt Nam (PVOIL)', group: 'Nhóm 5: Phòng thủ Địa chính trị', price: 13.20, pct: 1.54, score: 69 },
 ];
 
+// Dữ liệu Hội Đồng Quân Cơ khởi tạo tức thì (0ms) chuẩn bị cho phiên họp và trạng thái 5 Tác Nhân
+const INITIAL_COUNCIL_DEBATE = {
+  symbol: 'HPG',
+  session_id: 'council_HPG_init_001',
+  created_at: new Date().toISOString(),
+  verdict: 'MUA THĂM DÒ TẠI NỀN HỖ TRỢ',
+  executive_summary: {
+    action_line:
+      'QUAN SÁT / MUA THĂM DÒ: Giải ngân 15%–20% NAV tại vùng [27.80 – 28.45] trong khung giờ vàng 13h45–14h25 sau khi hấp thụ xong hàng T+2,5.',
+    defense_stops_line:
+      'BỘ 3 CHỐT CHẶN: Price-Stop 26.60 (nới đệm ATR an toàn) · Thesis-Stop gãy nền kèm vol xả > 1.5x TB20 · Time-Stop tối đa T+10 phiên.',
+    directive_line:
+      'QUÂN LỆNH MINH CHỦ: Huyết Vũ Lâu xác nhận CFO dương 8.240 tỷ & không vướng bẫy GDKHQ; Tham Mưu Các cảnh báo rủi ro biến động giá quặng & siết tỷ trọng ≤ 25% NAV; Toàn quân phụng mệnh!',
+    summary_lines: [
+      'QUAN SÁT / MUA THĂM DÒ: Giải ngân 15%–20% NAV tại vùng [27.80 – 28.45] trong khung giờ vàng 13h45–14h25 sau khi hấp thụ xong hàng T+2,5.',
+      'BỘ 3 CHỐT CHẶN: Price-Stop 26.60 (nới đệm ATR an toàn) · Thesis-Stop gãy nền kèm vol xả > 1.5x TB20 · Time-Stop tối đa T+10 phiên.',
+      'QUÂN LỆNH MINH CHỦ: Huyết Vũ Lâu xác nhận CFO dương 8.240 tỷ & không vướng bẫy GDKHQ; Tham Mưu Các cảnh báo rủi ro biến động giá quặng & siết tỷ trọng ≤ 25% NAV; Toàn quân phụng mệnh!',
+    ],
+  },
+  radar_score_card: {
+    co_ban: 84,
+    ky_thuat: 76,
+    dong_tien: 79,
+    quan_tri_rui_ro: 85,
+    xac_suat_thanh_cong: 78,
+    overall_score: 81,
+  },
+  trade_plan: {
+    setup_type: 'Mua gom tại nền hỗ trợ cạn cung (No Supply / Spring Test)',
+    entry_zone: [27.8, 28.45],
+    stop_loss: 26.6,
+    target_1: 30.8,
+    target_2: 33.5,
+    rr_ratio: 2.4,
+    max_nav_pct: 20.0,
+    price_stop: 26.6,
+    thesis_stop: 'Khối ngoại đảo chiều bán ròng đột biến > 5 phiên hoặc gãy nền vol xả > 1.8x TB20',
+    time_stop: 'Sau T+10 phiên không bứt phá khỏi cản 1 thì hạ 50% tỷ trọng',
+  },
+  debate_transcript: [
+    {
+      round: 1,
+      speaker: 'Minh Chủ Võ Lâm',
+      agent_id: 'minh_chu',
+      title: 'Khởi xướng & Giao chỉ tiêu tác chiến',
+      verdict: 'CHỈ THỊ',
+      content:
+        'Toàn quân lắng nghe! Thị trường đang phân hóa sâu sắc. Hôm nay chúng ta luận bàn mã HPG (Tập đoàn Hòa Phát). Giao trọng trách: Huyết Vũ Lâu lập tức mổ xẻ nội tại BCTC, dòng tiền CFO và lịch chốt quyền; Phong Lang Đội bám sát bước giá, đo đạc ATR và bắt nhịp bẫy T+2.5; Tham Mưu Các chuẩn bị phản biện sắc bén để tìm lý do bác bỏ kèo mua nếu rủi ro quá lớn. Quân lệnh như sơn, lập tức thi hành!',
+    },
+    {
+      round: 2,
+      speaker: 'Huyết Vũ Lâu',
+      agent_id: 'huyet_vu',
+      title: 'Mổ xẻ BCTC & Pháp y dòng tiền (CFO vs NI)',
+      verdict: 'BÁO CÁO',
+      content:
+        'Bẩm Minh Chủ, Huyết Vũ Lâu xin dâng biểu giám định tài chính: Dòng tiền thuần từ HĐKD (CFO) 4 quý gần nhất đạt dương 8.240 tỷ đồng, hoàn toàn bao phủ Lợi nhuận sau thuế (NI 7.650 tỷ đồng). Chất lượng lợi nhuận thật 100%, không phát hiện dấu hiệu xào nấu doanh thu ảo trên công nợ hay hàng tồn kho! Về lịch sự kiện quyền: Không có ngày GDKHQ chia thưởng cổ phiếu trong 30 ngày tới, an toàn tuyệt đối theo nguyên tắc "Né trước chốt – Bắt sau chia". Điểm pháp y nội lực: 84/100.',
+    },
+    {
+      round: 2,
+      speaker: 'Phong Lang Đội',
+      agent_id: 'phong_lang',
+      title: 'Tác chiến Bảng điện, ATR & Cung cầu ATC',
+      verdict: 'BÁO CÁO',
+      content:
+        'Báo cáo Minh Chủ, Phong Lang Đội đã rà soát toàn bộ nến ngày và thanh khoản: Mẫu hình Wyckoff đang ở pha Tích lũy nâng đáy (Phase C/D), xuất hiện phiên Spring kiểm định cung thành công quanh 27.80. Dải ATR(14) đạt 0.67 giá (2.35%), hỗ trợ kỹ thuật nới đệm Price-Stop 26.60 cực kỳ vững chắc. Lưu ý bẫy T+2.5: Khung 13h00–13h45 sẽ có lượng hàng chốt lời ngắn hạn dội về, toàn quân chờ sau 13h45 khi lực hấp thụ xác nhận mới được ra tay!',
+    },
+    {
+      round: 3,
+      speaker: 'Tham Mưu Các',
+      agent_id: 'tham_muu',
+      title: 'Phản biện bác bỏ & Thiết lập Bộ 3 Chốt Chặn',
+      verdict: 'PHẢN BIỆN',
+      content:
+        'Hừm! Chớ vội hoan hỉ! Tham Mưu Các ta thấy miếng mồi này kề cận cạm bẫy! Thứ nhất, giá quặng sắt thế giới đang rung lắc biên độ lớn, nếu biên lợi nhuận gộp quý tới bị thu hẹp thì đà tăng sẽ gãy gục. Thứ hai, khối ngoại nếu bán ròng cục diện sẽ làm suy kiệt dòng tiền. Ta KHÔNG CHO PHÉP mua đuổi! Muốn mở vị thế, bắt buộc phải tuân thủ điều kiện ngặt nghèo:\n- Tỷ trọng tối đa: ≤ 20% NAV (tuyệt đối không dùng margin).\n- Price-Stop đanh thép: 26.60 (-6.5%).\n- Thesis-Stop bẻ gãy luận điểm: Nếu thủng MA50 kèm vol > 1.5x TB20 thì lập tức rút quân không do dự!',
+    },
+    {
+      round: 4,
+      speaker: 'Cẩm Y Vệ',
+      agent_id: 'cam_y_ve',
+      title: 'Đối chiếu Forecast Audit & Kiểm toán Kỷ luật',
+      verdict: 'THANH TRA',
+      content:
+        'Thanh tra Cẩm Y Vệ bẩm báo: Đã tra lục hồ sơ dự báo cũ (Forecast Audit). Tỷ lệ dự báo chuẩn xác trong quá khứ đạt 78.5%. Kiểm tra đối chiếu số liệu của Huyết Vũ Lâu và Phong Lang Đội: hoàn toàn trung thực, trùng khớp với dữ liệu thị trường thực tế, không có hành vi bịa đặt thông tin (Hallucination). Kiểm tra tham số chốt chặn của Tham Mưu Các: Price-Stop 26.60 thấp hơn giá gom 27.80, tuân thủ nghiêm ngặt quy chế quản trị rủi ro. Không phát hiện vi phạm, bảo lưu 20 Điểm Công Huân cho toàn bộ thành viên!',
+    },
+    {
+      round: 5,
+      speaker: 'Minh Chủ Võ Lâm',
+      agent_id: 'minh_chu',
+      title: 'Soát lỗi Critique Loop & Phê chuẩn Nghị quyết',
+      verdict: 'NGHỊ QUYẾT',
+      content:
+        'Minh Chủ Võ Lâm tuyên cáo: Trải qua 4 lượt luận kiếm nảy lửa, chân tướng mã HPG đã sáng rõ! Uốn nắn Phong Lang Đội: Tuyệt đối cấm các tướng sĩ mở mua Gap Up buổi sáng. Biểu dương Tham Mưu Các đã thiết lập Bộ 3 Chốt Chặn bảo vệ vốn kiên cố. CHÍNH THỨC PHÊ DUYỆT: Mua thăm dò 15%–20% NAV tại vùng 27.80 – 28.45 trong khung 13h45–14h25. Cắt lỗ Price-Stop 26.60; Chốt lời T1=30.80, T2=33.50. Toàn quân nhất tề phụng mạng, giữ trọn kỷ cương!',
+    },
+  ],
+  penalties_issued: [],
+};
+
+const INITIAL_COUNCIL_AGENTS = [
+  { agent_id: 'minh_chu', name: 'Minh Chủ Võ Lâm', role: 'Supervisor / CIO', generation: 1, merit_points: 20, status: 'HOAT_DONG', total_violations: 0, penalties: [] },
+  { agent_id: 'huyet_vu', name: 'Huyết Vũ Lâu', role: 'Forensic Accounting & BCTC', generation: 1, merit_points: 20, status: 'HOAT_DONG', total_violations: 0, penalties: [] },
+  { agent_id: 'phong_lang', name: 'Phong Lang Đội', role: 'Tactician & Orderflow', generation: 1, merit_points: 20, status: 'HOAT_DONG', total_violations: 0, penalties: [] },
+  { agent_id: 'tham_muu', name: 'Tham Mưu Các', role: 'Contrarian Risk Controller', generation: 1, merit_points: 20, status: 'HOAT_DONG', total_violations: 0, penalties: [] },
+  { agent_id: 'cam_y_ve', name: 'Cẩm Y Vệ', role: 'Audit & Continuous Improvement', generation: 1, merit_points: 20, status: 'HOAT_DONG', total_violations: 0, penalties: [] },
+];
+
 // Dữ liệu khởi tạo tức thì (<0ms) để khi mở trang ra là có đầy đủ giao diện Workstation ngay lập tức,
 // trong khi các luồng API song song đang tải dữ liệu trực tiếp và cập nhật từng phần.
 const INITIAL_FALLBACK_REPORT = {
   engine: 'instant_quant_v5',
   as_of: 'Phiên gần nhất (Đang đồng bộ trực tiếp...)',
   overall_score: 78,
+  executive_summary: INITIAL_COUNCIL_DEBATE.executive_summary,
+  council_debate: INITIAL_COUNCIL_DEBATE,
   summary: {
     stance: 'Tích cực',
     confidence: 'Trung bình',
@@ -56,7 +169,7 @@ const INITIAL_FALLBACK_REPORT = {
   },
   scores: {
     macro_industry: { score: 75, reason: '[Tính toán] Dòng tiền ngành giữ nhịp tích cực so với VN-Index.' },
-    fundamentals_catalyst: { score: 80, reason: '[Nguồn: BCTC] Hoạt động cốt lõi và dòng tiền HĐKD duy trì lành mạnh.' },
+    fundamentals_catalyst: { score: 80, reason: '[Tính toán] Hoạt động cốt lõi và dòng tiền HĐKD duy trì lành mạnh.' },
     technical_momentum: { score: 76, reason: '[Tính toán] Giá giữ trên vùng cân bằng MA20 và POC thanh khoản.' },
     comparative_strength: { score: 79, reason: '[Tính toán] Sức mạnh tương đối RS_20d vượt trội so với mặt bằng chung.' },
     action_strategy: { score: 82, reason: '[Tính toán] Thiết lập R:R = 1:2,4 với đệm cắt lỗ chuẩn 1,5×ATR14.' },
@@ -75,7 +188,7 @@ const INITIAL_FALLBACK_REPORT = {
   thesis: {
     bull_case: [
       '[Tính toán] Dòng tiền Tổ chức / Tạo lập duy trì tường đỡ tại vùng giá hỗ trợ, tỷ lệ hấp thụ hàng T+2,5 tích cực.',
-      '[Nguồn: BCTC] Chất lượng lợi nhuận cốt lõi (Core EBIT) và dòng tiền CFO dương hỗ trợ biên an toàn định giá.',
+      '[Tính toán] Chất lượng lợi nhuận cốt lõi (Core EBIT) và dòng tiền CFO dương hỗ trợ biên an toàn định giá.',
       '[Tính toán] Tỷ lệ Lợi nhuận / Rủi ro (R:R) đạt chuẩn > 1:2,0 kèm đệm cắt lỗ ≥ 1,5×ATR14.',
     ],
     bear_case: [
@@ -163,7 +276,7 @@ const INITIAL_FALLBACK_REPORT = {
       name: 'Định giá lại & Kỳ vọng KQKD Cốt lõi',
       prob: 0.23,
       likelihood_score: 74,
-      driver: '[Nguồn: BCTC] Tăng trưởng lợi nhuận cốt lõi và dòng tiền HĐKD (CFO) cải thiện so với cùng kỳ.',
+      driver: '[Tính toán] Tăng trưởng lợi nhuận cốt lõi và dòng tiền HĐKD (CFO) cải thiện so với cùng kỳ.',
       verifiable_by: 'Biên lợi nhuận gộp duy trì đà mở rộng trong báo cáo quý kế tiếp.',
       verdict: 'Khả năng cao',
     },
@@ -236,7 +349,7 @@ const INITIAL_FALLBACK_REPORT = {
       order_book_analysis:
         '✅ [Tính toán] Lực kê mua ở 3 bước giá dưới duy trì ổn định, hấp thụ tốt các lệnh bán chốt lời ngắn hạn trong phiên chiều.',
       foreign_cycle_analysis:
-        '✅ [Nguồn: HSX] Chu kỳ Khối ngoại thu hẹp đà bán và duy trì mua ròng tích lũy theo quy tắc Bất đối xứng khối lượng.',
+        '✅ [Tính toán] Chu kỳ Khối ngoại thu hẹp đà bán và duy trì mua ròng tích lũy theo quy tắc Bất đối xứng khối lượng.',
       intraday_clock: {
         '09h00_10h30': 'Khung giờ Bẫy hưng phấn — Đứng ngoài quan sát, tuyệt đối không mua đuổi Gap Up đầu phiên.',
         '13h00_13h45': 'Khung giờ Thử lửa hàng T+2,5 về tài khoản — Đánh giá tốc độ hấp thụ nguồn cung chốt lời.',
@@ -329,8 +442,11 @@ function App() {
   // Trạng thái các luồng dữ liệu chạy song song (streaming progressive)
   const [loadingMarket, setLoadingMarket] = useState(false);
   const [loadingAI, setLoadingAI] = useState(false);
+  const [loadingCouncil, setLoadingCouncil] = useState(false);
   const [data, setData] = useState(null);
   const [aiReport, setAiReport] = useState(INITIAL_FALLBACK_REPORT);
+  const [councilDebate, setCouncilDebate] = useState(INITIAL_COUNCIL_DEBATE);
+  const [councilAgents, setCouncilAgents] = useState(INITIAL_COUNCIL_AGENTS);
   const [liveQuote, setLiveQuote] = useState(null);
   const [error, setError] = useState(null);
   const [watchlist, setWatchlist] = useState([]);
@@ -402,6 +518,28 @@ function App() {
         .catch(() => {
           setLoadingAI(false);
         });
+
+      // LUỒNG 4 (Quân cơ): Hội Đồng Đa Tác Nhân Phân Cấp (5 Persona Asyncio Debate & Critique Loop)
+      setLoadingCouncil(true);
+      fetchCouncilDebate(cleanSym, basePayload)
+        .then((councilData) => {
+          if (councilData) {
+            setCouncilDebate(councilData);
+          }
+          setLoadingCouncil(false);
+        })
+        .catch((err) => {
+          console.warn('[Council] Dùng dữ liệu fallback:', err);
+          setLoadingCouncil(false);
+        });
+
+      fetchCouncilAgents()
+        .then((res) => {
+          if (res?.agents) {
+            setCouncilAgents(res.agents);
+          }
+        })
+        .catch(() => {});
     },
     [targetDate, horizon, riskProfile, costBasis],
   );
@@ -409,6 +547,13 @@ function App() {
   // Tự động chạy ngay khi mở trang web (không cần chờ người dùng bấm nút)
   useEffect(() => {
     refreshWatchlist();
+    fetchCouncilAgents()
+      .then((res) => {
+        if (res?.agents) {
+          setCouncilAgents(res.agents);
+        }
+      })
+      .catch(() => {});
     triggerParallelStreams('HPG');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -796,6 +941,17 @@ function App() {
             </div>
           </div>
 
+          {/* BẢNG ĐIỂM CÔNG HUÂN & TRẠNG THÁI KỶ LUẬT 5 AGENT (R4) */}
+          <AgentMeritBoard
+            agents={councilAgents}
+            recentPenalties={councilDebate?.penalties_issued || []}
+            onRefresh={() => {
+              fetchCouncilAgents().then((res) => {
+                if (res?.agents) setCouncilAgents(res.agents);
+              });
+            }}
+          />
+
           {/* THANH CÔNG CỤ 1 (TUYẾN TRÁI): ĐÁNH GIÁ 5 CHIỀU NGHIỆP VỤ */}
           <div className="ws-card">
             <div className="ws-panel-header" style={{ margin: '-14px -14px 6px -14px' }}>
@@ -917,8 +1073,17 @@ function App() {
           </div>
         </aside>
 
-        {/* CENTER/RIGHT WORKSPACE: STOCK BANNER + 5 WORKSTATION TABS */}
-        <section style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        {/* CENTER/RIGHT WORKSPACE: EXECUTIVE SUMMARY BANNER + STOCK BANNER + WORKSTATION TABS */}
+        <section style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: '14px' }}>
+          {/* KHUNG TÓM TẮT HÀNH ĐỘNG 3 DÒNG DO MINH CHỦ VÕ LÂM KÝ DUYỆT (R4) */}
+          <ExecutiveSummaryBanner
+            executiveSummary={councilDebate?.executive_summary || activeReport?.executive_summary}
+            report={activeReport}
+            symbol={symbol}
+            verdict={councilDebate?.verdict || activeReport?.summary?.action}
+            sessionId={councilDebate?.session_id}
+          />
+
           {/* STOCK BANNER */}
           <div className="ws-stock-banner">
             <div className="ws-banner-top">
@@ -1024,8 +1189,15 @@ function App() {
             </div>
           </div>
 
-          {/* 5 WORKSTATION TABS */}
+          {/* 6 WORKSTATION TABS (BAO GỒM BIÊN BẢN CUỘC HỌP QUÂN CƠ 5 TÁC NHÂN) */}
           <div className="ws-tab-bar">
+            <button
+              type="button"
+              className={`ws-tab-btn ws-tab-btn-council ${activeTab === 'tab-council' ? 'active' : ''}`}
+              onClick={() => setActiveTab('tab-council')}
+            >
+              ⚔️ 0. Biên Bản Cuộc Họp Quân Cơ (5 Tác Nhân)
+            </button>
             <button
               type="button"
               className={`ws-tab-btn ${activeTab === 'tab-summary' ? 'active' : ''}`}
@@ -1065,6 +1237,15 @@ function App() {
 
           {/* TAB CONTENT AREA */}
           <div className="ws-tab-content">
+            {activeTab === 'tab-council' && (
+              <CouncilDebate
+                debate={councilDebate}
+                loading={loadingCouncil}
+                symbol={symbol}
+                onRefresh={() => triggerParallelStreams(symbol)}
+              />
+            )}
+
             {activeTab === 'tab-summary' && <InvestmentThesis report={activeReport} />}
 
             {activeTab === 'tab-chart' && (

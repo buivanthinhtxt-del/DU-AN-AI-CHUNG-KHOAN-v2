@@ -133,8 +133,8 @@ Dành riêng cho nhà đầu tư bận rộn ngoài công trường không thể
 *Bản trình Hội đồng Đầu tư Định chế × Tác chiến T+2,5 (Version 5.0) · Dữ liệu đến: dd/mm/yyyy · Đơn vị giá: nghìn đồng · Hồ sơ: [Khung thời gian | Khẩu vị | Vị thế]*
 
 ### 🎯 KẾT LUẬN & QUYẾT NGHỊ CỦA HỘI ĐỒNG (BLUF)
-- **Quyết định:** [Hành động] `[Suy luận]` — **Độ tin cậy:** [Cao/Trung bình/Thấp] — **Định danh bàn cờ Tạo lập:** [Nhóm 1–5] `[Nguồn]`
-- **Luận điểm cốt lõi:** [1–2 câu đanh thép có số liệu thực tế về dòng tiền, định giá nội tại và vị trí hỗ trợ] `[Nguồn]`/`[Tính toán]`
+- **Quyết định:** [Hành động] `[Suy luận]` — **Độ tin cậy:** [Cao/Trung bình/Thấp] — **Định danh bàn cờ Tạo lập:** [Nhóm 1–5] `[Suy luận]`
+- **Luận điểm cốt lõi:** [1–2 câu đanh thép có số liệu thực tế về dòng tiền, định giá nội tại và vị trí hỗ trợ] `[Tính toán]`/`[Suy luận]` (chỉ dùng `[Nguồn]` khi trích nguyên văn số liệu BCTC/công bố thông tin)
 - **Chỉ thị người CHƯA có vị thế:** [Chiến thuật mua gom hay chờ sau T+2,5, vùng giá mua, khung giờ bấm nút 13h45–14h30/ATC, tỷ trọng tối đa] `[Tính toán]`
 - **Chỉ thị người ĐANG nắm giữ:** [Chốt lời 3 nhịp 30%–50%–20%, mốc Trailing Stop trượt 1,5%–2% cụ thể] `[Tính toán]`
 - **Mức giá bản lề (Pivot Level):** [Vùng giá phân định ranh giới kịch bản] `[Tính toán]`
@@ -153,10 +153,10 @@ Dành riêng cho nhà đầu tư bận rộn ngoài công trường không thể
 ### 4. Ma trận 6 Giả thuyết Biến động Giá (Causal Hypotheses Matrix)
 | Giả thuyết nguyên nhân | Diễn giải & Bằng chứng thực tế | Nhãn kiểm chứng | Xác suất (%) | Điều kiện xác nhận / Bác bỏ |
 | :--- | :--- | :--- | :--- | :--- |
-| H1: Gom hàng & Hấp thụ | Gom ngầm vùng hỗ trợ, cạn cung No Supply | `[Nguồn]`/`[Tính toán]` | ...% | Bứt phá nền kèm vol > 1,5x TB20 |
+| H1: Gom hàng & Hấp thụ | Gom ngầm vùng hỗ trợ, cạn cung No Supply | `[Tính toán]` | ...% | Bứt phá nền kèm vol > 1,5x TB20 |
 | H2: Phân phối & Neo giá xả ngầm | Neo giá xanh nhẹ, vol kỷ lục cụt đầu | `[Suy luận]` | ...% | Thủng hỗ trợ ngắn hạn kèm lệnh lớn xả |
 | H3: Tái cơ cấu Quỹ (ETF/NAV) | Tác động review định kỳ quỹ ngoại/nội | `[Giả định]` | ...% | Lệnh ATC đột biến ngày thứ 6 cơ cấu |
-| H4: Luân chuyển Ngành tự nhiên | Dòng tiền xoay vòng theo vĩ mô ngành | `[Nguồn]` | ...% | Cả ngành đồng loạt bứt phá dòng tiền |
+| H4: Luân chuyển Ngành tự nhiên | Dòng tiền xoay vòng theo vĩ mô ngành | `[Suy luận]` | ...% | Cả ngành đồng loạt bứt phá dòng tiền |
 | H5: Tái định giá Căn bản (Re-rating) | KQKD quý tăng trưởng đột biến cốt lõi | `[Suy luận]` | ...% | Lợi nhuận ròng quý vượt dự báo |
 | H6: Thanh lý Kỹ thuật / Call Margin | Lực bán giải chấp chéo diện rộng | `[Chưa xác định]` | ...% | Lệnh bán MP sàn áp đảo mất thanh khoản |
 

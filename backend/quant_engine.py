@@ -1128,11 +1128,11 @@ def _analyze_atc(df: pd.DataFrame, quote_snapshot: Optional[dict] = None) -> dic
 
     # Hình thái ATC
     if upper_wick >= 1.5 * body and upper_wick >= 0.35 * span and clv <= 0.40:
-        atc_pattern = "Bị đạp ATC / Nến cụt đầu (Tạo lập từ chối giá cao, cẩn trọng bẫy Bull-trap)"
+        atc_pattern = "Bị đè bán ATC / Nến cụt đầu (Áp lực chốt lời vùng giá cao, cẩn trọng bẫy Bull-trap)"
         implication = "Áp lực cung đè giá cuối phiên lớn. Tránh mua đuổi sáng hôm sau vì dễ có bẫy mở gap giảm trả điểm."
     elif lower_wick >= 1.5 * body and lower_wick >= 0.35 * span and clv >= 0.60:
-        atc_pattern = "Rút chân mạnh ATC (Tay to kê lệnh há miệng đỡ giá cuối phiên)"
-        implication = "Lực cầu tổ chức chủ động đỡ giá vùng thấp trước giờ đóng cửa. Tín hiệu tích cực cho nhịp T+."
+        atc_pattern = "Rút chân mạnh phiên ATC (Lực cầu hấp thụ vùng giá thấp cuối phiên)"
+        implication = "Lực cầu gia tăng hấp thụ lệnh bán ở vùng thấp trước giờ đóng cửa. Tín hiệu hỗ trợ tích cực cho nhịp T+."
     elif clv >= 0.85 and span > 0 and body > 0.4 * span:
         atc_pattern = "Kéo dứt khoát ATC / Đóng nến Marubozu cao nhất phiên"
         implication = "Phe mua kiểm soát hoàn toàn phiên giao dịch tới phút chót. Khả năng cao mở gap xanh đầu phiên sau."
@@ -1264,7 +1264,7 @@ def _evaluate_causal_hypotheses(profile: dict) -> list[dict]:
 
     hypotheses_defs = [
         ("H1", "Gom hàng/Tích lũy", "Tạo lập gom ngầm vùng hỗ trợ, cạn cung", "Vol cạn kiệt, spread hẹp, xuất hiện nến Test cung/Spring"),
-        ("H2", "Phân phối/Xả ngầm", "Kéo trụ xả midcap, tay to ra hàng vùng kháng cự", "Upthrust, râu nến trên dài, phân kỳ âm RSI/MACD, nhiều ngày phân phối"),
+        ("H2", "Phân phối/Xả ngầm", "Kéo trụ xả midcap, phân phối vùng kháng cự", "Upthrust, râu nến trên dài, phân kỳ âm RSI/MACD, nhiều ngày phân phối"),
         ("H3", "Quỹ tái cơ cấu", "Review định kỳ ETF hoặc cơ cấu danh mục khối ngoại", "Khớp lệnh đột biến phiên ATC thứ 6, tỷ trọng giao dịch ngoại > 20%"),
         ("H4", "Luân chuyển ngành", "Dòng tiền xoay vòng tự nhiên giữa các ngành dẫn dắt", "Toàn ngành cùng bứt phá, thanh khoản lan tỏa đồng thuận"),
         ("H5", "Tái định giá", "Định giá lại nội tại, điểm rơi KQKD quý vượt kỳ vọng", "Tăng trưởng doanh thu/lợi nhuận > 20%, P/E và P/B chiết khấu sâu"),
@@ -1393,8 +1393,8 @@ def _tactical_playbook_6step(
     lower_wick = min(c, o_last) - l_last
     if vol_ratio >= 1.5 and abs(chg_pct) <= 0.85:
         tape_signals.append(
-            f"⚠️ CẢNH BÁO NEO GIÁ XẢ NGẦM (Churning): Khối lượng phiên cuối nổ cao ({vol_ratio:.1f}× TB20) "
-            f"nhưng giá chỉ biến động {chg_pct:+.2f}% → dấu hiệu tay to trao tay/xả ẩn dụ cầu FOMO."
+            f"⚠️ CẢNH BÁO PHÂN KỲ KHỐI LƯỢNG (Churning): Khối lượng phiên cuối nổ cao ({vol_ratio:.1f}× TB20) "
+            f"nhưng giá chỉ biến động {chg_pct:+.2f}% → dấu hiệu phân kỳ khối lượng/biên độ giá (tín hiệu phân phối tiềm ẩn hoặc giao dịch trao tay)."
         )
     if upper_wick > max(1.2 * body, 0.55 * atr):
         tape_signals.append(
@@ -1421,7 +1421,7 @@ def _tactical_playbook_6step(
         if 0.1 <= dip_pct <= 2.5 and c > prev10_low:
             spring_note = (
                 f"✅ PHÁT HIỆN CÚ RŨ GIẢ (Spring / Wash-out): Giá từng nhúng thủng đáy nền {prev10_low:.2f} xuống {min_low3:.2f} "
-                f"(lệch nền {dip_pct:.2f}% ≤ 2,5%) để quét Stop-loss nhỏ lẻ rồi rút chân đóng cửa lấy lại nền tại {c:.2f}."
+                f"(lệch nền {dip_pct:.2f}% ≤ 2,5%) kiểm định dưới nền rồi phục hồi đóng cửa giữ vững nền tại {c:.2f}."
             )
             tape_signals.append(spring_note)
         elif dip_pct > 2.5 and c < prev10_low:
@@ -1450,16 +1450,16 @@ def _tactical_playbook_6step(
             ba_ratio = sum_bid / sum_ask
             if ba_ratio >= 1.6:
                 order_book_note = (
-                    f"✅ TƯỜNG ĐỠ TỔ CHỨC TRÊN SỔ LỆNH: Tổng khối lượng Kê Mua 3 bước giá ({sum_bid:,.0f} cp) gấp {ba_ratio:.1f} lần "
-                    f"bên Bán ({sum_ask:,.0f} cp) → tay to đang kê lệnh chặn đỡ vùng giá dưới."
+                    f"✅ ĐỘ SÂU SỔ LỆNH TỨC THỜI (ƯU THẾ BÊN MUA): Tổng khối lượng Kê Mua 3 bước giá ({sum_bid:,.0f} cp) gấp {ba_ratio:.1f} lần "
+                    f"bên Bán ({sum_ask:,.0f} cp); áp lực cầu chờ mua chiếm ưu thế tại thời điểm ghi nhận."
                 )
             elif ba_ratio <= 0.6:
                 order_book_note = (
-                    f"⚠️ ÁP LỰC CHẶN BÁN TRÊN SỔ LỆNH: Tổng khối lượng Kê Bán ({sum_ask:,.0f} cp) gấp {1/ba_ratio:.1f} lần "
-                    f"bên Mua ({sum_bid:,.0f} cp) → cung treo dày ở các bước giá trên."
+                    f"⚠️ ĐỘ SÂU SỔ LỆNH TỨC THỜI (ƯU THẾ BÊN BÁN): Tổng khối lượng Kê Bán ({sum_ask:,.0f} cp) gấp {1/ba_ratio:.1f} lần "
+                    f"bên Mua ({sum_bid:,.0f} cp); áp lực cung chờ bán chiếm ưu thế tại các bước giá phía trên."
                 )
             else:
-                order_book_note = f"Sổ lệnh cân bằng: Dư mua 3 bước {sum_bid:,.0f} cp / Dư bán {sum_ask:,.0f} cp (tỷ lệ {ba_ratio:.2f}×)."
+                order_book_note = f"Độ sâu sổ lệnh tức thời cân bằng: Kê mua 3 bước {sum_bid:,.0f} cp / Kê bán {sum_ask:,.0f} cp (tỷ lệ {ba_ratio:.2f}×)."
         fh = snapshot.get("foreign_history")
         if fh and fh.get("recent"):
             net1 = fh.get("net_1d_bn") or 0
