@@ -235,4 +235,8 @@ fiintrade_demo.html
 *.log
 *.tmp
 *.bak
+*.pt
+*.onnx
+*.weights
+func.py
 
