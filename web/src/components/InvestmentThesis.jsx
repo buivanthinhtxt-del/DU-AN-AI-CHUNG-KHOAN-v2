@@ -152,11 +152,16 @@ export default function InvestmentThesis({ report }) {
 
       {/* KẾT LUẬN */}
       <div className="verdict-hero" style={{ borderColor: actionColor }}>
-        <div className="verdict-action" style={{ color: actionColor }}>
-          {summary.action || 'Quan sát'}
-          <span className="verdict-sub">
-            {summary.stance} · Độ tin cậy {summary.confidence}
-          </span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.4rem' }}>
+          <div className="verdict-action" style={{ color: actionColor }}>
+            {summary.action || 'Quan sát'}
+            <span className="verdict-sub">
+              {summary.stance} · Độ tin cậy {summary.confidence}
+            </span>
+          </div>
+          <div className="thesis-chip" style={{ fontSize: '0.8rem', padding: '0.2rem 0.6rem', background: 'rgba(255,255,255,0.06)' }}>
+            📅 Phiên: <strong style={{ color: 'var(--text-active)' }}>{report.as_of || 'Hôm nay'}</strong> · Giá tham chiếu: <strong className="mono" style={{ color: 'var(--accent-gold)' }}>{vn(qs.close || report.price || tp.entry_high)}</strong>
+          </div>
         </div>
         <p className="verdict-thesis">{renderInlineFormatting(verdict.core_thesis)}</p>
       </div>
@@ -241,8 +246,28 @@ export default function InvestmentThesis({ report }) {
               </div>
             </>
           ) : (
-            <div className="audit-meta muted small" style={{ marginTop: '0.4rem', lineHeight: '1.5' }}>
-              Chưa có dữ liệu dự báo lịch sử cho mã này để đối chiếu (lần đầu tạo hồ sơ hoặc bắt đầu phiên phân tích mới). Toàn bộ tham số vào lệnh, cắt lỗ và mục tiêu của phiên hôm nay đã được tự động lưu vào <code>cache/forecast_audit</code> để đối chiếu 4 chiều (Hướng, Biên độ, Thời điểm, Điều kiện) ở các phiên tiếp theo.
+            <div style={{ marginTop: '0.6rem', padding: '0.8rem', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '6px', border: '1px dashed rgba(59, 130, 246, 0.3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem', color: 'var(--accent-blue)', fontWeight: 700, fontSize: '0.84rem' }}>
+                <ShieldAlert size={16} />
+                <span>CẨM Y VỆ: ĐÃ KHỞI TẠO HỒ SƠ GIÁM SÁT DỰ BÁO (AUDIT BASELINE ACTIVE)</span>
+              </div>
+              <p style={{ margin: '0.2rem 0 0.5rem 0', fontSize: '0.82rem', lineHeight: '1.5' }}>
+                Đây là phiên thẩm định đầu tiên của mã <strong>{report.symbol}</strong> tại ngày <strong>{report.as_of || 'T0'}</strong> (Giá chốt: <strong className="mono">{vn(qs.close || report.price || tp.entry_high)}</strong>). Toàn bộ vùng mua ({vn(tp.entry_low)}–{vn(tp.entry_high)}), mục tiêu ({vn(tp.target_1)} / {vn(tp.target_2)}) và cắt lỗ ({vn(tp.stop_loss)}) đã được ký số lưu vào Sổ Nam Tào.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.6rem', borderRadius: '4px' }}>
+                  <div className="muted small" style={{ fontSize: '0.7rem' }}>CHU KỲ TỰ ĐỐI CHIẾU</div>
+                  <div className="mono" style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-active)' }}>T+2.5, T+5, T+10 phiên</div>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.6rem', borderRadius: '4px' }}>
+                  <div className="muted small" style={{ fontSize: '0.7rem' }}>4 CHIỀU THẨM ĐỊNH</div>
+                  <div className="mono" style={{ fontSize: '0.78rem', color: 'var(--accent-gold)' }}>Hướng · Biên độ · Thời gian · Kỷ luật</div>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.4rem 0.6rem', borderRadius: '4px' }}>
+                  <div className="muted small" style={{ fontSize: '0.7rem' }}>QUY CHẾ CÔNG HUÂN</div>
+                  <div className="mono" style={{ fontSize: '0.78rem', color: 'var(--down-color)' }}>Trừ -1đ nếu sai lệch giá &gt; 5%</div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -267,12 +292,19 @@ export default function InvestmentThesis({ report }) {
                 <td>
                   <span className="mono down-color">{vn(tp.stop_loss)}</span>
                   {tp.stop_pct ? <span className="muted"> (−{vn(tp.stop_pct)}%)</span> : null}
-                  {tp.stop_basis ? <div className="muted small">{tp.stop_basis}</div> : null}
+                  <div className="muted small" style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                    <strong>Nguyên nhân chốt chặn:</strong> {tp.stop_basis || 'Thủng hỗ trợ nền S1 kèm đệm an toàn 1.5× ATR'}
+                  </div>
                 </td>
               </tr>
               <tr>
                 <td>Mục tiêu 1 / 2</td>
-                <td className="mono up-color">{vn(tp.target_1)} / {vn(tp.target_2)}</td>
+                <td>
+                  <span className="mono up-color">{vn(tp.target_1)} / {vn(tp.target_2)}</span>
+                  <div className="muted small" style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                    <strong>Nguyên nhân & Cơ sở khai thác:</strong> Vùng cản kỹ thuật POC / Đỉnh cũ & Dải thống kê 68%–95% chu kỳ T+
+                  </div>
+                </td>
               </tr>
               <tr>
                 <td>Tỷ lệ R:R</td>

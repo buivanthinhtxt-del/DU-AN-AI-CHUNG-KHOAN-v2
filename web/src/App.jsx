@@ -20,6 +20,7 @@ import ExecutiveSummaryBanner from './components/ExecutiveSummaryBanner';
 import AgentMeritBoard from './components/AgentMeritBoard';
 import CouncilDebate from './components/CouncilDebate';
 import RealDataPanel from './components/RealDataPanel';
+import TopForeignFlow from './components/TopForeignFlow';
 
 import {
   fetchMarketDataApi,
@@ -1209,6 +1210,9 @@ function App() {
               </div>
             </div>
           </div>
+
+          {/* TOP GIAO DỊCH KHỐI NGOẠI TOÀN SÀN (MUA/BÁN RÒNG REAL-TIME TỪ VIETCAP) */}
+          <TopForeignFlow onSelectSymbol={handleSelectSymbol} />
 
           {/* 6 WORKSTATION TABS (BAO GỒM BIÊN BẢN CUỘC HỌP QUÂN CƠ 5 TÁC NHÂN) */}
           <div className="ws-tab-bar">

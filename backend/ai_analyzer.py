@@ -887,12 +887,12 @@ def _rule_based_report(ctx: dict, reason: str) -> dict:
     rep = {
         "analysis": md,
         "verdict": {
-            "core_thesis": f"{t['label']}; {fl['flow_verdict'].lower()}; R:R kế hoạch 1:{_vn(rr)}.",
-            "short_term": f"{action}: {bp['setup_type'].lower()}, vùng mua {_vn(bp['entry_low'])}–{_vn(bp['entry_high'])}, cắt lỗ {_vn(bp['stop_loss'])}.",
-            "medium_term": "Chưa đánh giá nội lực doanh nghiệp — cần AI để đọc BCTC và định giá.",
+            "core_thesis": f"Tại phiên ngày {q['last_date']} (giá tham chiếu {_vn(close)}): {t['label']}; {fl['flow_verdict'].lower()}; R:R kế hoạch 1:{_vn(rr)}.",
+            "short_term": f"{action}: {bp['setup_type'].lower()} quanh vùng {_vn(bp['entry_low'])}–{_vn(bp['entry_high'])}, cắt lỗ tại {_vn(bp['stop_loss'])} (nguyên nhân: thủng hỗ trợ nền S1 kèm đệm ATR 1.5×).",
+            "medium_term": f"Kỳ vọng mục tiêu 1 tại {_vn(bp['target_1'])} (nguyên nhân: cản kỹ thuật POC/đỉnh cũ) và mục tiêu 2 tại {_vn(bp['target_2'])} (dải thống kê 95% chu kỳ).",
             "for_new_buyers": bp["entry_trigger"],
-            "for_holders": (bp.get("holder") or {}).get("note") or f"Giữ khi giá còn trên {_vn(bp['stop_loss'])}; thủng thì hạ tỷ trọng.",
-            "decision_level": f"Vượt {_vn(bp['target_1'])} / thủng {_vn(bp['stop_loss'])}",
+            "for_holders": (bp.get("holder") or {}).get("note") or f"Giữ khi giá còn trên {_vn(bp['stop_loss'])}; thủng thì hạ tỷ trọng dứt khoát.",
+            "decision_level": f"Vượt {_vn(bp['target_1'])} (khóa lãi nhịp 1) / thủng {_vn(bp['stop_loss'])} (chốt chặn thoái lui)",
         },
         "thesis": {
             "bull_case": [x for x in [

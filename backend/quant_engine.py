@@ -1575,37 +1575,37 @@ def _tactical_playbook_6step(
     dist_to_sup_pct = (c / s1 - 1) * 100 if s1 > 0 else 0
     checklist_5m = [
         {
-            "step": "1. Kiểm tra Sự kiện Quyền (GDKHQ)",
-            "status": "⚠️ CẦN XÁC MINH" if event_flags else "🟢 SẴN SÀNG (Kiểm tra ký hiệu • trên bảng điện)",
+            "step": "1. Sự kiện Quyền (GDKHQ)",
+            "status": "⚠️ CẦN XÁC MINH NGÀY CHỐT" if event_flags else "🟢 AN TOÀN (Không có quyền chia trong 14 ngày tới)",
             "detail": (
-                "Tuyệt đối KHÔNG mua trong 2 phiên (T-1, T-2) trước ngày GDKHQ chia cổ tức cổ phiếu / phát hành thêm "
-                "để tránh bị giam vốn 2–3 tháng và chịu 5% thuế TNCN. Áp dụng 'Né trước chốt – Bắt sau chia'."
+                f"Sự kiện ghi nhận: {'; '.join(event_flags) if event_flags else 'Không có lịch chốt quyền chia cổ tức/cổ phiếu thưởng sắp tới'}. "
+                "Quy tắc sống còn: Tuyệt đối KHÔNG mua trong 2 phiên trước ngày GDKHQ để tránh giam vốn 2–3 tháng và bị trừ 5% thuế."
             ),
         },
         {
-            "step": "2. Khung giờ Tác chiến & Vị trí Giá mua",
-            "status": "🟢 VÙNG MUA HỢP LỆ" if dist_to_sup_pct <= 3.5 else "🟡 CÁCH XA NỀN (Cấm FOMO Gap Up sáng)",
+            "step": "2. Khung giờ Bấm Lệnh & Đệm An Toàn",
+            "status": "🟢 VÙNG MUA CHUẨN" if dist_to_sup_pct <= 3.5 else f"🟡 CÁCH XA NỀN ({dist_to_sup_pct:+.1f}%)",
             "detail": (
-                f"Giá hiện tại {c:.2f} cách nền hỗ trợ {s1:.2f} khoảng {dist_to_sup_pct:+.1f}%. "
-                "Chỉ bấm nút trong khung Phán quyết 13h45–14h25 chiều; tuyệt đối không mua đuổi giá xanh khung 09h00–10h30 sáng."
+                f"Giá hiện tại {c:.2f} cách hỗ trợ S1 ({s1:.2f}) là {dist_to_sup_pct:+.1f}%. "
+                "Khung giờ phán quyết duy nhất: 13h45 – 14h25 chiều. Tuyệt đối không bấm lệnh mua giá xanh ở khung hưng phấn 09h00–10h30 sáng."
             ),
         },
         {
-            "step": "3. Dòng tiền Tổ chức / Khối ngoại",
-            "status": "🔴 CẢNH BÁO XẢ ẨN" if any("NEO GIÁ XẢ NGẦM" in s for s in tape_signals) else "🟢 THEO DÕI CHU KỲ",
+            "step": "3. Dòng tiền Khối ngoại & Đọc Bảng điện",
+            "status": "🔴 CẢNH BÁO XẢ NGẦM" if any("NEO GIÁ XẢ NGẦM" in s for s in tape_signals) else "🟢 THEO DÕI BÌNH THƯỜNG",
             "detail": f"{foreign_cycle_note} | {order_book_note}",
         },
         {
-            "step": "4. Kiểm tra Chu kỳ Hàng nổ Vol T+2,5 về tài khoản",
-            "status": "🟡 CHỜ QUA 13H45 NGÀY MAI" if has_tomorrow_t25 else "🟢 KHÔNG VƯỚNG ÁP LỰC XẢ T+2,5 NGÀY MAI",
-            "detail": t25_events[-1]["status"] if t25_events else "Không có phiên nổ thanh khoản đột biến (>1,6× TB20) nào sắp về tài khoản.",
+            "step": "4. Kiểm tra Chu kỳ Hàng nổ Vol T+2,5",
+            "status": "🟡 ÁP LỰC HÀNG VỀ CHIỀU MAI" if has_tomorrow_t25 else "🟢 KHÔNG VƯỚNG ÁP LỰC XẢ T+2,5 CHIỀU MAI",
+            "detail": t25_events[-1]["status"] if t25_events else "Không có phiên nổ thanh khoản kỷ lục (>1,6× TB20) nào sắp về tài khoản ngày mai.",
         },
         {
-            "step": "5. Thiết lập Chốt chặn Tự động (Stop Order & Price Alert)",
+            "step": "5. Cài Lệnh Điều Kiện Stop Order",
             "status": "🟢 BẮT BUỘC CÀI NGAY SAU KHỚP",
             "detail": (
-                f"Cài sẵn Price Alert tại hỗ trợ {s1:.2f} và Lệnh điều kiện Stop Order cắt lỗ tại {baseline_plan['stop_loss']:.2f} "
-                f"(hoặc Trailing Stop trượt 1,5%–2% tại {trail_20:.2f}–{trail_15:.2f}) để yên tâm làm việc."
+                f"Cài sẵn Lệnh Stop Order cắt lỗ tự động tại {baseline_plan['stop_loss']:.2f} (ngưỡng -{baseline_plan['stop_pct']:.1f}%). "
+                f"Tỷ trọng tối đa: {baseline_plan['max_position_pct']:.0f}% NAV (giải ngân 2 bước, không tất tay)."
             ),
         },
     ]

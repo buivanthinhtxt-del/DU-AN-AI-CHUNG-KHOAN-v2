@@ -530,6 +530,68 @@ async def api_realtime_intraday(symbol: str, resolution: str = "1"):
             "bars": bars, "source": df.attrs.get("endpoint") if bars else None, "market": market_session()}
 
 
+_TOP_FOREIGN_CACHE = {"timestamp": 0, "data": None}
+
+def _fetch_top_foreign_sync():
+    now = time.time()
+    if _TOP_FOREIGN_CACHE["data"] and (now - _TOP_FOREIGN_CACHE["timestamp"]) < 30:
+        return _TOP_FOREIGN_CACHE["data"]
+    
+    url = "https://trading.vietcap.com.vn/api/price/symbols/getList"
+    headers = {"User-Agent": "Mozilla/5.0", "Referer": "https://trading.vietcap.com.vn/"}
+    symbols = [
+        "ACB", "BCM", "BID", "BVH", "CTG", "FPT", "GAS", "GVR", "HDB", "HPG", 
+        "MBB", "MSN", "MWG", "PLX", "POW", "SAB", "SHB", "SSB", "SSI", "STB", 
+        "TCB", "TPB", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VRE",
+        "DGC", "GEX", "VND", "VCI", "HCM", "KBC", "DIG", "DXG", "PVD", "PVS", "HSG", "NKG"
+    ]
+    try:
+        import requests
+        res = requests.post(url, json={"symbols": symbols}, headers=headers, timeout=5)
+        if res.status_code == 200:
+            data = res.json()
+            rows = []
+            for item in data:
+                info = item.get("listingInfo", {})
+                sym = info.get("symbol")
+                mp = item.get("matchPrice", {})
+                fb_vol = mp.get("foreignBuyVolume") or 0
+                fs_vol = mp.get("foreignSellVolume") or 0
+                fb_val = mp.get("foreignBuyValue") or 0
+                fs_val = mp.get("foreignSellValue") or 0
+                price = (mp.get("matchPrice") or info.get("refPrice") or 0) / 1000.0
+                net_vol = fb_vol - fs_vol
+                net_val_bn = round((fb_val - fs_val) / 1e9, 2)
+                if net_vol != 0 or net_val_bn != 0:
+                    rows.append({
+                        "symbol": sym,
+                        "price": price,
+                        "fb_vol": fb_vol,
+                        "fs_vol": fs_vol,
+                        "net_vol": net_vol,
+                        "net_val_bn": net_val_bn,
+                    })
+            top_buy = sorted([r for r in rows if r["net_val_bn"] > 0], key=lambda x: x["net_val_bn"], reverse=True)[:5]
+            top_sell = sorted([r for r in rows if r["net_val_bn"] < 0], key=lambda x: x["net_val_bn"])[:5]
+            result = {
+                "top_buy": top_buy,
+                "top_sell": top_sell,
+                "updated_at": datetime.now().strftime("%H:%M:%S"),
+            }
+            _TOP_FOREIGN_CACHE["timestamp"] = now
+            _TOP_FOREIGN_CACHE["data"] = result
+            return result
+    except Exception as e:
+        logger.warning(f"[top_foreign] error: {e}")
+    return _TOP_FOREIGN_CACHE["data"] or {"top_buy": [], "top_sell": [], "updated_at": ""}
+
+
+@app.get("/api/realtime/top-foreign")
+async def api_realtime_top_foreign():
+    """Top 5 Mua ròng & Top 5 Bán ròng khối ngoại trên sàn HOSE/VN30."""
+    return await asyncio.to_thread(_fetch_top_foreign_sync)
+
+
 # --- Watchlist APIs (hoàn toàn non-blocking với asyncio.to_thread) ---
 @app.get("/api/watchlist")
 async def api_get_watchlist():
